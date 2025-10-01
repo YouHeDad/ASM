@@ -1,0 +1,52 @@
+***  Installation Started 04/02/2024 22:18  ***
+Title: TI-Black Link
+Source: C:\Users\jacob\Downloads\ti83pusa.exe | 04-02-2024 | 22:12:16 | 1280840
+File Copy: C:\Windows\System32\drivers\Ticalc.sys | 08-30-1999 | 14:51:42 | | 9152 | 7163053
+Made Dir: C:\Program Files (x86)\TI Education\Black Link
+File Copy: C:\Program Files (x86)\TI Education\Black Link\UNWISE.EXE | 06-25-1999 | 10:55:30 | | 149504 | 30fdd633
+File Copy: C:\Program Files (x86)\TI Education\Black Link\Unwise.ini
+User Rights: Admin
+***  Installation Started 04/02/2024 22:18  ***
+Title: TI-GRAPHLINK TI-83 Plus/Silver Edition
+Source: C:\Users\jacob\Downloads\ti83pusa.exe | 04-02-2024 | 22:12:16 | 1280840
+RegDB Key: System\CurrentControlSet\Services\TICalc
+RegDB Val: 1
+RegDB Name: ErrorControl
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc
+RegDB Val: 2
+RegDB Name: Start
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc
+RegDB Val: 1
+RegDB Name: Type
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc\Parameters
+RegDB Val: 4000
+RegDB Name: TicCablePowerOnDelay
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc\Parameters
+RegDB Val: 2
+RegDB Name: TicDebounceDelay
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc\Parameters
+RegDB Val: 50
+RegDB Name: TicDelayBetweenBytes
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc\Parameters
+RegDB Val: 1
+RegDB Name: TicInterstateDelay
+RegDB Root: 2
+RegDB Key: System\CurrentControlSet\Services\TICalc\Parameters
+RegDB Val: 2
+RegDB Name: TicState4Delay
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\Uninstall\TI-Black Link
+RegDB Val: TI-Black Link
+RegDB Name: DisplayName
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\Uninstall\TI-Black Link
+RegDB Val: C:\PROGRA~2\TIEDUC~1\BLACKL~1\Unwise.exe /U /Z C:\PROGRA~2\TIEDUC~1\BLACKL~1\Install.log
+RegDB Name: UninstallString
+RegDB Root: 2
+User Rights: Admin

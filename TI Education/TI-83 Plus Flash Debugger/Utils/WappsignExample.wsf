@@ -1,0 +1,48 @@
+<job>
+
+<SCRIPT Language="VBScript" src="WappConsts.vbs"/>
+
+<SCRIPT Language="VBScript">
+  Option Explicit
+
+  Dim sHexFile
+  Dim sKeyFile
+  Dim sOutput
+  Dim oWappsign
+  Dim lErrorCode
+  Dim objArgs
+
+  Set objArgs   = WScript.Arguments
+  Set oWappsign = CreateObject("Wappsign.Sign")
+
+  If objArgs.Count = 0 Then
+    MsgBox "Please drag and drop a hex file on to this script icon to sign it!"
+    WScript.Quit
+  End If
+
+  oWappsign.Flags = waVerbose
+
+  sHexFile  = objArgs(0)
+  sKeyFile  = oWappsign.GetKeyFile(sHexFile)
+
+  If sKeyFile = "" Then
+    MsgBox "Key file could not be found - Fillapp only build to be performed."
+    oWappSign.Flags = waVerbose Or waFillOnly
+  End If
+
+  sOutput   = oWappsign.FormatOutput(sHexFile)
+
+  If sOutput = "" Then
+    MsgBox "Problem generating output. This is fatal, sorry!"
+    WScript.Quit(-1)
+  End If
+
+  lErrorCode = oWappsign.Sign(sHexFile, sKeyFile, sOutput)
+
+  If lErrorCode <> 0 Then
+    MsgBox oWappsign.GetErrorMessage(lErrorCode)
+  End If
+
+</SCRIPT>
+
+</job>

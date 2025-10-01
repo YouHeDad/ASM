@@ -1,0 +1,68 @@
+
+Texas Instruments Software Development Kit
+
+End-User License Agreement
+
+Read this license agreement before installing the Software Development Kit ("SDK") on your computer.
+By installing the SDK, you acknowledge acceptance of the terms of this license. The software 
+program and text materials from TI that support the SDK are licensed, not sold. If you do not agree
+with the terms and conditions of this license, exit the installation process now.
+
+LICENSE AND TERM
+
+(Single User)
+
+Texas Instruments Incorporated and its subsidiaries (TI) and/or any applicable licensors 
+(collectively referred to as Licensor) grant to you a personal, non-exclusive, non-transferable 
+license to use the software program, in whatever form, and any related documentation 
+(collectively referred to as the Program) on a single central processing unit. You may make one 
+copy of the software for backup and archival purposes. You agree to reproduce all copyright 
+and proprietary notices shown in the Program.
+
+THIS PROGRAM IS PROTECTED BY UNITED STATES COPYRIGHT LAW AND INTERNATIONAL TREATY PROVISIONS. 
+UNAUTHORIZED COPYING, REVERSE COMPILING, OR DISASSEMBLY IS PROHIBITED. TITLE TO THE PROGRAM WILL 
+AT ALL TIMES REMAIN WITH LICENSOR.
+
+The restrictions in this license are for the benefit of any party who holds title to any part 
+of the Program.
+
+You may not lease, rent, sublicense, assign, or otherwise transfer the Program without the prior 
+written consent of TI. All rights not expressly granted are reserved by the Licensor.
+
+WARRANTY DISCLAIMER AND DAMAGES LIMITATIONS
+
+Licensor does not warrant the Program will be free from errors or will meet your specific 
+requirements. Any statements made concerning the utility of the Program are not to be construed 
+as express or implied warranties.
+
+LICENSOR MAKES NO CONDITIONS OR WARRANTIES, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED 
+TO ANY IMPLIED CONDITIONS OR WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, 
+REGARDING THE PROGRAM AND MAKES THE PROGRAM AVAILABLE ON AN "AS IS" BASIS.  IN JURISDICTIONS WHICH 
+ALLOW TEXAS INSTRUMENTS TO LIMIT ITS LIABILITY, THEN TI'S LIABILITY IS LIMITED TO THE MAXIMUM 
+EXTENT ALLOWED UNDER THE APPLICABLE LEGISLATION.  THIS PARAGRAPH EXPRESSES LICENSOR'S MAXIMUM 
+LIABILITY AND YOUR SOLE AND EXCLUSIVE REMEDY.
+
+LICENSOR SHALL NOT BE RESPONSIBLE FOR ANY DAMAGES CAUSED BY THE USE OF THE PROGRAM, SUFFERED 
+OR INCURRED BY YOU OR ANY OTHER PARTY INCLUDING BUT NOT LIMITED TO INDIRECT, INCIDENTAL OR 
+CONSEQUENTIAL DAMAGES, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+Because some states, provinces or territories do not allow the exclusion or limitation of 
+incidental or consequential damages or limitation on how long an implied warranty lasts, the above 
+limitations or exclusions may not apply to you.
+
+GENERAL
+
+This license will immediately terminate if you fail to comply with its terms, Upon any termination 
+of this license, you agree to destroy the original copy of the Program and all whole or partial 
+copies of the Program in your possession and so certify in writing to TI.
+
+The Program may be subject to export regulations by the United States Government. Prior to export 
+or re-export, you agree to obtain any licenses which may be required under the applicable laws 
+of the United States.
+
+The Program is provided with Restricted Rights. Use, duplication or disclosure by the United States 
+Government is subject to restrictions as set forth in subparagraph (c)(1)(ii) of the Rights in 
+Technical Data and Computer Software clause at DFARS 252.227-7013 or in subparagraphs (c)(1) 
+and (2) of the Commercial Computer Software - Restricted Rights at 48 CFR 52.227-19, as applicable.
+
+Manufacturer is Texas Instruments Incorporated, 7800 Banner Drive, Dallas, Texas 75251.

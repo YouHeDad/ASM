@@ -1,0 +1,91 @@
+***  Installation Started 04/02/2024 22:17  ***
+Title: TI-GRAPHLINK TI-83 Plus/Silver Edition
+Source: C:\Users\jacob\Downloads\ti83pusa.exe | 04-02-2024 | 22:12:16 | 1280840
+Made Dir: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\UNWISE.EXE | 06-25-1999 | 10:55:30 | | 149504 | 30fdd633
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\UNWISE.INI | 04-28-1999 | 10:02:54 | | 4833 | 3b511c9
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\Uninstall\TI-Graph Link 83 Plus
+RegDB Val: TI-Graph Link 83 Plus
+RegDB Name: DisplayName
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\Uninstall\TI-Graph Link 83 Plus
+RegDB Val: C:\PROGRA~2\TIEDUC~1\TI-GRA~1\UNWISE.EXE /U /Z C:\PROGRA~2\TIEDUC~1\TI-GRA~1\Install.log
+RegDB Name: UninstallString
+RegDB Root: 2
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\WLINK83p.HLP | 02-27-2001 | 17:36:46 | | 479537 | d921f98c
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Wlink83p.exe | 02-27-2001 | 18:10:24 | 1.0.0.1 | 720672 | c0b6f6d
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Bigauge.vbx | 02-27-2001 | 17:36:32 | | 7424 | fd40f97a
+NON-SYSTEM FILE:
+File Copy: C:\Windows\Wlink83p.ini
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\dll16.dll | 02-27-2001 | 17:36:32 | | 15884 | 6c38f8cf
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\ticalc.dll | 02-27-2001 | 17:36:42 | 1.0.0.1 | 49152 | 9847f6ac
+User Rights: Admin
+***  Installation Started 04/02/2024 22:18  ***
+Title: TI-GRAPHLINK TI-83 Plus/Silver Edition
+Source: C:\Users\jacob\Downloads\ti83pusa.exe | 04-02-2024 | 22:12:16 | 1280840
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\readme.pdf | 02-14-2001 | 12:51:24 | | 42422 | 19354597
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\readme.txt | 02-12-2001 | 16:14:38 | | 9257 | f9e54bb8
+Date/Time: Following file not copied.
+ File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Wlink83p.hlp
+File Copy: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\wlink83p.pdf | 01-03-2000 | 10:34:50 | | 76932 | 228f5e5
+NON-SYSTEM FILE:
+File Copy: C:\Windows\Fonts\Ti83ppc.ttf | 02-27-2001 | 17:36:42 | | 44052 | 8cad4587
+NON-SYSTEM FILE:
+File Copy: C:\Windows\Fonts\Ti83ppcb.ttf | 02-27-2001 | 17:36:42 | | 45008 | b28cdbd
+File Copy: C:\Windows\Fonts\Keyfon73.fon | 02-27-2001 | 18:22:42 | | 6656 | 58b6caec
+RegDB Key: Software\Microsoft\Windows NT\CurrentVersion\Fonts
+RegDB Val: Keyfon73.FON
+RegDB Name: Keyfon73.FON
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows NT\CurrentVersion\Fonts
+RegDB Val: Ti83ppc.ttf
+RegDB Name: TI83Pluspc (True Type)
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows NT\CurrentVersion\Fonts
+RegDB Val: Ti83ppcb.ttf
+RegDB Name: Ti83Pluspcb (True Type)
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\App Paths\Wlink83p.exe
+RegDB Val: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus
+RegDB Root: 2
+RegDB Key: Software\Microsoft\Windows\CurrentVersion\App Paths\Wlink83p.exe
+RegDB Val: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Wlink83p.exe
+RegDB Name: Path
+RegDB Root: 2
+User Rights: Admin
+***  Installation Started 04/02/2024 22:18  ***
+Title: TI-GRAPHLINK TI-83 Plus/Silver Edition
+Source: C:\Users\jacob\Downloads\ti83pusa.exe | 04-02-2024 | 22:12:16 | 1280840
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Comm Info
+INI Item: Cable
+INI Val: 0
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Setup
+INI Item: DestDir
+INI Val: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Setup
+INI Item: EXEName
+INI Val: Wlink83p.exe
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Setup
+INI Item: SourceDIR
+INI Val: C:\Users\jacob\Downloads
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Setup
+INI Item: IconGroup
+INI Val: C:\Users\jacob\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\TI-Graph Link
+INI File: C:\WINDOWS\WLINK83p.INI
+INI Sect: Setup
+INI Item: Language
+INI Val: USA
+Made Dir: C:\Users\jacob\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\TI-Graph Link
+Shell Link: C:\Users\jacob\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\TI-Graph Link\TI-Graph Link 83 Plus.lnk
+Link Info: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Wlink83p.exe | C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus |  | 0 | 1 | 0 | 
+Shell Link: C:\Users\jacob\Desktop\TI-Graph Link 83 Plus.lnk
+Link Info: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\Wlink83p.exe | C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus |  | 0 | 1 | 0 | 
+Shell Link: C:\Users\jacob\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\TI-Graph Link\TI-Graph Link 83 Plus Help.lnk
+Link Info: C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus\WLINK83p.HLP | C:\Program Files (x86)\TI Education\TI-Graph Link 83 Plus |  | 0 | 1 | 0 | 
+Installation Aborted!
+User Rights: Admin
