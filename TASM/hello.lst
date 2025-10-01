@@ -1,0 +1,54 @@
+Zilog Macro Assembler.  Version K2.14    06-Apr-124    18:08:15    Page:    1
+
+
+c:\asm\tasm\asmtutorial\hello.asm
+
+Location Object              Type  Line Source
+00000000                     A        1 .NOLIST
+                             A        2 #define   EQU   .equ
+c:\asm\tasm\asmtutorial\hello.asm: line 0002: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+                             A        3 #define   equ   .equ
+c:\asm\tasm\asmtutorial\hello.asm: line 0003: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+                             A        4 #define   END   .end
+c:\asm\tasm\asmtutorial\hello.asm: line 0004: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+                             A        5 #define   end   .end
+c:\asm\tasm\asmtutorial\hello.asm: line 0005: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+                             A        6 #include "ti83plus.inc"
+c:\asm\tasm\asmtutorial\hello.asm: line 0006: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+00000000                     A        7 .LIST
+                             A        8      .org 9D93h
+c:\asm\tasm\asmtutorial\hello.asm: line 0008: ZMA-W0004 Warning: Extra characters on source statement
+                             A        9       .db $BB,$6D
+c:\asm\tasm\asmtutorial\hello.asm: line 0009: ZMA-E0057 Error: Unrecognized instruction mnemonic
+c:\asm\tasm\asmtutorial\hello.asm: line 0009: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+00000009 3E 00               A       10       ld a,0           ; load the value 0 to register a, the ''accumulator''
+0000000B 32 00 00            A       11       ld (CURCOL),a    ; assign the contents of register a to memory address (CURCOL) in the RAM
+c:\asm\tasm\asmtutorial\hello.asm: line 0011: ZMA-E0012 Error: Symbol 'CURCOL' is not defined
+c:\asm\tasm\asmtutorial\hello.asm: line 0011: ZMA-E0058 Error: Invalid operand
+0000000E 32 00 00            A       12       ld (CURROW),a    ; assign the contents of register a to memory address (CURROW) in the RAM
+c:\asm\tasm\asmtutorial\hello.asm: line 0012: ZMA-E0012 Error: Symbol 'CURROW' is not defined
+c:\asm\tasm\asmtutorial\hello.asm: line 0012: ZMA-E0058 Error: Invalid operand
+00000011 21 00 00            A       13       ld hl,text       ; load the data in label "text" to register hl
+c:\asm\tasm\asmtutorial\hello.asm: line 0013: ZMA-E0058 Error: Invalid operand
+                             A       14       B_CALL(_PutS)    ; calls a function in ti83plus.inc to print text
+c:\asm\tasm\asmtutorial\hello.asm: line 0014: ZMA-E0057 Error: Unrecognized instruction mnemonic
+c:\asm\tasm\asmtutorial\hello.asm: line 0014: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+                             A       15       B_CALL(_NewLine) ; calls a function in ti83plus.inc to insert a lnbreak (for legibility)
+c:\asm\tasm\asmtutorial\hello.asm: line 0015: ZMA-E0057 Error: Unrecognized instruction mnemonic
+c:\asm\tasm\asmtutorial\hello.asm: line 0015: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+00000014 C9                  A       16       ret              ; returns from the program to the calc's OS
+00000015                     A       17 text:
+c:\asm\tasm\asmtutorial\hello.asm: line 0017: ZMA-E0011 Error: Label 'text' is already defined
+                             A       18       .db "Hello, World",0
+c:\asm\tasm\asmtutorial\hello.asm: line 0018: ZMA-E0057 Error: Unrecognized instruction mnemonic
+c:\asm\tasm\asmtutorial\hello.asm: line 0018: ZMA-E0086 Error: Expected a machine, assembler, or macro call instruction
+00000015                     A       19 .end
+00000015                     A       20 end
+Zilog Macro Assembler.  Version K2.14    06-Apr-124    18:08:15    Page:    2
+
+
+c:\asm\tasm\asmtutorial\hello.asm
+
+
+    1 Warnings
+   19 Errors

@@ -1,0 +1,116 @@
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    1
+
+LINK MAP:
+
+Date:      Sat Apr 06 18:04:18 2024
+Processor: Z89C00
+Files:     [Command] c:\asm\tasm\helloworld2.cmd
+
+COMMAND LIST:
+=============
+     1: -q c:\asm\tasm\helloworld2.cmd 
+     2: ; ZDS Generated Linker Command File
+     3: -A
+     4: -g
+     5: -m "c:\asm\tasm\helloworld2.map"
+     6: -v
+     7: Bankvector %38
+     8: Assign .const ROM
+     9: Assign .startup ROM
+    10: Define .BSS_BASE = base of .bss
+    11: Define .BSS_LENGTH = length of .bss
+    12: Define .DATA_BASE = base of .data
+    13: Define .DATA_LENGTH = length of .data
+    14: Define .DATA_COPY = copy base of .data
+    15: Define .TOS = %fffe
+    16: Define .CBAR = %82
+    17: Locate .ovlhf %38
+    18: Copy .data ROM
+    19: Order .startup
+    20: Range EXTIO %0,%100000
+    21: Range INTIO %0,%100
+    22: Range ROM %0,%20000
+    23: Bankarea ovbank,ROM,%2000,%6000
+    24: -o "c:\asm\tasm\helloworld2"
+ZLD-E0028 Error: '.ovlhf' is not a control section name
+ZLD-W0001 Warning: Extra characters on command line
+ZLD-E0028 Error: '.data' is not a control section name
+ZLD-W0001 Warning: Extra characters on command line
+ZLD-E0028 Error: '.startup' is not a control section name
+ZLD-E0029 Error: 'EXTIO' is neither an address space nor a control section name
+ZLD-W0001 Warning: Extra characters on command line
+ZLD-E0029 Error: 'INTIO' is neither an address space nor a control section name
+ZLD-W0001 Warning: Extra characters on command line
+ZLD-E0042 Error: Invalid bank address alignment
+ZLD-E0029 Error: '.bss' is neither an address space nor a control section name
+ZLD-E0029 Error: '.bss' is neither an address space nor a control section name
+ZLD-E0029 Error: '.data' is neither an address space nor a control section name
+ZLD-E0029 Error: '.data' is neither an address space nor a control section name
+ZLD-E0029 Error: '.data' is neither an address space nor a control section name
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    2
+
+SPACE ALLOCATION:
+=================
+
+Space                            Base     Top      Span    
+-------------------------------- -------- -------- --------
+
+SEGMENTS WITHIN SPACE:
+======================
+
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    3
+
+SEGMENTS WITHIN MODULES:
+========================
+
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    4
+
+EXTERNAL DEFINITIONS BY ADDRESS:
+================================
+
+Symbol                           Address  Module       Segment                         
+-------------------------------- -------- ------------ --------------------------------
+.DATA_BASE                       00000000 (unknown)    (unknown)
+.DATA_COPY                       00000000 (unknown)    (unknown)
+.BSS_LENGTH                      00000000 (unknown)    (unknown)
+.BSS_BASE                        00000000 (unknown)    (unknown)
+.DATA_LENGTH                     00000000 (unknown)    (unknown)
+.CBAR                            00000082 (unknown)    (unknown)
+.TOS                             0000FFFE (unknown)    (unknown)
+
+    7 External symbols.
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    5
+
+EXTERNAL DEFINITIONS BY NAME:
+=============================
+
+Symbol                           Address  Module       Segment                         
+-------------------------------- -------- ------------ --------------------------------
+.BSS_BASE                        00000000 (unknown)    (unknown)
+.BSS_LENGTH                      00000000 (unknown)    (unknown)
+.CBAR                            00000082 (unknown)    (unknown)
+.DATA_BASE                       00000000 (unknown)    (unknown)
+.DATA_COPY                       00000000 (unknown)    (unknown)
+.DATA_LENGTH                     00000000 (unknown)    (unknown)
+.TOS                             0000FFFE (unknown)    (unknown)
+
+    7 External symbols.
+Zilog Linkage Editor.  Version C2.12    06-Apr-124    18:04:18    Page:    6
+
+SYMBOL CROSS REFERENCE:
+=======================
+
+Symbol                           Module       Use        
+-------------------------------- ------------ ---------- 
+.BSS_BASE                        (command)    Definition
+.BSS_LENGTH                      (command)    Definition
+.CBAR                            (command)    Definition
+.DATA_BASE                       (command)    Definition
+.DATA_COPY                       (command)    Definition
+.DATA_LENGTH                     (command)    Definition
+.TOS                             (command)    Definition
+
+End of link map:
+================
+    4 Warnings
+   11 Errors

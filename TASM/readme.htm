@@ -1,0 +1,224 @@
+<html>
+
+<head>
+<title>Eliza - Ben Ryves 2004</title>
+<style>
+body, p, h1, h2, h3, li, ul, li, a
+{
+	color: #000033;
+	background: #99CCFF;
+	font-family: verdana, tahoma, arial, helvetica;
+	font-size: x-small;
+	border-collapse: collapse;
+	margin-bottom: 0px;
+	border: 0px none;
+}
+p
+{
+	margin-top: 0px;
+	margin-left: 20px;
+}
+h1
+{
+	font-size: medium;
+}
+h2
+{
+	font-size: small;
+}
+table, tr, td
+{
+	margin-top: 10px;
+	margin-bottom: 10px;
+	margin-left: 40px;
+	font-family: lucida console, courier new;
+	font-size: x-small;
+	border-color: black;
+	background-color: white;
+	width: 80%;
+}
+</style>
+</head>
+
+<body>
+<img border="0" src="pictures/icon.gif" width="136" height="136"></h2>
+<h1>Eliza - Your own personal Psychiatrist</h1>
+<h2>Ben Ryves 2004</h2>
+<h3>Naughtiness</h3>
+<p>I uploaded the original version to ticalc.org and they sent it back with a 
+cover note explaining that there were a few too many naughty words. As such, 
+this is a limited version based on the original PC version I based this on.</p>
+<h3>Disclaimer</h3>
+<p>Psychiatrist... well, yeah. Just don't take her too seriously. She's not 
+charging; if you tell her all your troubles and she tells you to &quot;GET LOST&quot; it's 
+not my fault. Or hers. Try not to take it personally, OK?</p>
+<p>If you want to see how strange she is, start a fresh install, say &quot;Good 
+Morning&quot; then answer &quot;No&quot; to &quot;Do you have any psychological problems&quot;.</p>
+<p>My point exactly. Anyway, if this causes your calculator to melt, crash, 
+trigger a nuclear war with Belgium or cause your cat to spontaneously combust, 
+it's not my fault.</p>
+<h3>What is Eliza?</h3>
+<table><tr><td>Eliza is a program that simulates intelligence by holding a conversation with its operator.  It was first conceived by Joseph Weizenbaum at MIT in 1966 and was written in Fortran.
+A brief description of its operation 
+follows:<br>
+  When the user types in a sentence, Eliza scans for "keywords" which can be words or phrases. Each keyword has one or more responses associated with it. These responses can be complete sentences or may require that a modified portion of the user's text be appended to them. The portion of text is all text to the right of the keyword. The modification is that the text is correctly conjugated (i.e., "I" becomes "YOU"). This allows the computer to handle different subjects "intelligently" without gigabytes of canned responses.</td></tr></table>
+<p>The above text was taken from a BASIC Eliza, written by Frederick B. Maxwell 
+back in 1989. His Eliza was the basis of this one; his is a lot simpler as at 
+least he had access to BASIC, and I've done mine in ASM. You could easily do 
+this in BASIC too, but the responses file is about 7K in raw ASCII - not 
+practical or fast to search in TI-BASIC! And we all know how great TI-BASIC 
+is... Real men program in ASM!</p>
+<h3>Installation</h3>
+<p>Well, you have quite a choice here. What type of calculator do you have?</p>
+
+<ul>
+  <li>TI-83 Plus (good choice!)<p>For the Ion (or 100% compatible) shell;</p>
+
+  <ul>
+    <li>Send the file Eliza - Ion.8xp to your calculator.</li>
+  </ul>
+<p>For the MirageOS shell (the only advantage is the icon);</p>
+
+  <ul>
+    <li>Send the file Eliza - MirageOS.8xp to your calculator.</li>
+  </ul>
+  </li>
+  <li>Regular TI-83 (buy a new calculator you stingy lot)<p>You only get the Ion version.</p>
+
+  <ul>
+    <li>Send the file Eliza.83p to your calculator.</li>
+  </ul>
+  </li>
+</ul>
+<p>&nbsp;</p>
+
+<p>Once you have sent the file to your calculator, you need to open up the shell 
+you installed it for. Highlight the &quot;Eliza - Ben Ryves&quot; text, and press Enter.</p>
+
+<h3>Using Eliza</h3>
+
+<p>Eliza is very simple to use. Not that you should use women, they are real 
+people too and deserve to be treated with the utmost respect. But you can use 
+this program, which is a simulation of a psychiatrist.</p>
+
+<p>You should have a clear screen with a border and an introductory line of text 
+at the top. Just type away to Eliza! Press Enter once you've entered your 
+question. You can use any of the keys on your TI from 
+A-Z and space. I haven't catered for punctuation as these would have to be 
+stripped out of the input anyway and that'd make the program even more 
+cumbersome. If you make a mistake, press Del to back up and then carry on 
+typing. If you type in a mega-huge-über-question, don't be alarmed that Eliza 
+gets impatient and swallows your input without asking you to press Enter. You have a maximum of 150 characters (for 
+memory reasons). Pressing Clear at any time will instantly quit. She doesn't 
+charge.</p>
+
+<h3>Source Code and Modifications</h3>
+
+<p>The source is included in the Zip archive - just look in that Source folder! 
+All you need to do to get it ready to compile is to download ti83plus.inc from
+<a href="http://education.ti.com">http://education.ti.com</a> (it's a 110K file 
+- too big to stick in this Zip) and put it in the same folder. At the top of the 
+main file &quot;eliza.z80&quot; is the line '#define TI83P'. Change this to set compile 
+target:</p>
+<table><tr><td>#define TI83P ;Compiles to TI-83 Plus Ion<br>
+  #define TI83M ;Compiles to TI-83 Plus MirageOS<br>
+  #define TI83I ;Compiles to TI-83 Ion</td></tr></table>
+<p>Fairly straightforwards, I hope!</p>
+<p>Now, why would you want to edit the source? Well, I can guess you'd mainly 
+want to edit the replies.inc file.</p>
+<p>This is quite an evil task! Fortunately, I've helped (aren't I a nice guy?) 
+with the little tool &quot;Convert DAT File.exe&quot;.</p>
+<p>This basically allows you to convert the eliza.dat file into replies.inc with 
+the miminum of hassle. The eliza.dat file MUST be in the same directory as the 
+EXE! The file can be opened up in Notepad.</p>
+<table><tr><td>.<br>
+  LIST<br>
+  OF<br>
+  KEYWORDS<br>
+  !<br>
+  LIST<br>
+  OF<br>
+  RESPONSES</td></tr></table>
+  <p>It is structured like this: The higher up an entry is in the file, the 
+  sooner Eliza chooses it as a response. For example, in this file:</p>
+<table><tr><td>.<br>
+  I<br>
+  !<br>
+  YOU LIKE TALKING ABOUT YOURSELF<br>
+  WHAT ABOUT YOU?<br>
+  .<br>
+  I FEEL<br>
+  !<br>
+  WHY DO YOU FEEL*</td></tr></table>
+<p>...the &quot;I FEEL&quot; section would never get reached, because even if the person 
+said &quot;I FEEL ILL&quot; the &quot;I&quot; would get caught by the upper keyword block.</p>
+<p>Hence the swearwords (I didn't put those there - they're from the original 
+file!) are near the top, so whatever you say, if it has a swearword in it it'll 
+get caught early.</p>
+<p>Some blocks have got &quot;speech marks&quot; around them. This is because the file is 
+comma/newline delimited, so the file:</p>
+<table><tr><td>.<br>
+  FISH<br>
+  !<br>
+  HEY, I LIKE FISH!</td></tr></table>
+<p>...actually reads as two different responses: &quot;HEY&quot; and &quot;I LIKE FISH&quot; (this 
+is part of the way VB works when reading files). Just put &quot;speech marks&quot; around 
+the line if you're going to put in a comma.</p>
+<p>The last thing to note are the lines that end in an asterisk (*). When Eliza 
+replies with one of these, she'll output a conjugated version of the remainder 
+of the input string after the keyword. For example; with the &quot;I FEEL&quot; example, 
+if I said &quot;I FEEL THAT YOU ARE STUPID&quot; would output &quot;WHY DO YOU FEEL&quot;; the text 
+after the keyword is &quot;THAT YOU ARE STUPID&quot; - this is conjugated to &quot;THAT I AM 
+STUPID&quot; - and outputted, to say &quot;WHY DO YOU FEEL THAT I AM STUPID&quot;.</p>
+<p>Ideas;</p>
+<ul>
+  <li>Dialects/Languages<p>Make Eliza speak a foreign language. You'd have to 
+  change the conjugation table, but it's possible!</p>
+<p>Alternatively, just give her an accent!</p>
+  </li>
+  <li>Manner of speaking<p>Sarcastic Eliza? Stupid Eliza? 1337 h4xx0r 3L1z4? AOL 
+  ELIzA!!11!~~!one!!</p>
+  </li>
+  <li>Well educated<p>Add a group of keywords pertaining to a favourite subject. 
+  The first Eliza I saw had a &quot;castles&quot; file, and so asked you all about your 
+  castle. It had data on towers, drawbridges, suits of armour and the like. 
+  Maybe produce one that you can ask your calculator questions to?</p>
+  </li>
+</ul>
+<p>&nbsp;</p>
+<p>If you do create a new Eliza, please post it to <a href="http://ticalc.org">
+http://ticalc.org</a> for others to enjoy; I'd love a copy too! Please remember 
+to leave credit where credit is due, and it'd be awesome if you could keep this 
+original readme in your release. Just put your name at the top with mine, or put 
+&quot;Uber Eliza 2001 by John Hacker&quot; and &quot;Powered by Ben Ryves' Eliza&quot;. You get the 
+idea. Else I'll set my trained killer lemurs on you.</p>
+<h3>Do you actually <i>have </i>a life?</h3>
+
+<p>No; some say I need to get out more.</p>
+
+<p>Still, if I wasn't up to this sort of unhealthy thing, you wouldn't have such 
+awesome programs on your TI handheld, would you?</p>
+
+<h3>Why is this called Eliza?</h3>
+
+<p>Well, if you had any knowledge of the finer arts you would know of the book 
+Pygmalion by George Bernard Shaw; failing that you should know the musical &quot;My 
+Fair Lady&quot; which is based on this book. Anyway; it features a flower girl called 
+Eliza Doolittle who is taught to shrug off her thick London accent and to adopt 
+a much fairer tone - and pretends to be much more than she really is. Same goes 
+for this computer program; it's appearing to be something more than it is with a 
+few clever word-swaps! No intelligence involved; all it does is respond with 
+pre-prepared phrases, sometimes returning what you just said but switching 
+person and posing it as a question. Just about as bright as your average gym 
+teacher.</p>
+
+<h3>Contact</h3>
+
+<p>Bugs, comments, death threats? <a href="mailto:benryves@benryves.com">
+benryves@benryves.com</a> is the place to go.</p>
+
+<p>Say Hello to Eliza for me!</p>
+
+</body>
+
+</html>

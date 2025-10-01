@@ -1,0 +1,487 @@
+ion.inc line 0335: Forward reference in equate: (plotsscreen)
+ion.inc line 0336: Forward reference in equate: (plotsscreen)
+ion.inc line 0337: Forward reference in equate: (plotsscreen)
+ion.inc line 0338: Forward reference in equate: (saferam1)
+ion.inc line 0339: Forward reference in equate: (saferam1)
+ion.inc line 0340: Forward reference in equate: (saferam2)
+ion.inc line 0341: Forward reference in equate: (saferam2)
+ion.inc line 0342: Forward reference in equate: (progptr)
+ion.inc line 0343: Forward reference in equate: (imathptr1)
+ion.inc line 0344: Forward reference in equate: (_copygbuf)
+ion.inc line 0345: Forward reference in equate: (_cleargbuf)
+ion.inc line 0346: Forward reference in equate: (_clrlcdf)
+ion.inc line 0347: Forward reference in equate: (_clrscrf)
+ion.inc line 0348: Forward reference in equate: (_chksysvar)
+ion.inc line 0349: Forward reference in equate: (saferam3)
+ion.inc line 0350: Forward reference in equate: (saferam1)
+ion.inc line 0352: Forward reference in equate: (cmdshad)
+ion.inc line 0390: Duplicate label: (textEraseBelow)
+ion.inc line 0391: Duplicate label: (textScrolled)
+ion.inc line 0392: Duplicate label: (textInverse)
+ion.inc line 0395: Duplicate label: (onRunning)
+ion.inc line 0396: Duplicate label: (onInterrupt)
+ion.inc line 0402: Duplicate label: (fmtExponent)
+ion.inc line 0403: Duplicate label: (fmtEng)
+ion.inc line 0411: Duplicate label: (curAble)
+ion.inc line 0412: Duplicate label: (curOn)
+ion.inc line 0413: Duplicate label: (curLock)
+ion.inc line 0416: Duplicate label: (appTextSave)
+ion.inc line 0417: Duplicate label: (appAutoScroll)
+ion.inc line 0424: Duplicate label: (indicRun)
+ion.inc line 0425: Duplicate label: (indicOnly)
+ion.inc line 0428: Duplicate label: (shift2nd)
+ion.inc line 0429: Duplicate label: (shiftAlpha)
+ion.inc line 0430: Duplicate label: (shiftALock)
+ion.inc line 0437: Duplicate label: (grfSplit)
+C:/ASM/TASM/zball.z80 line 0018: Forward reference in equate: (STATVARS)
+0001   0000             ;-------------------------------------------------------------------------
+0002   0000             ;The Ball by Emir Sakic
+0003   0000             ;saka@hotmail.com
+0004   0000             ;Examples on sprites and self modifying code
+0005   0000             ;(c) 2001.
+0006   0000             ;-------------------------------------------------------------------------
+0007   0000             
+0011   0000                     .list
+0012   0000             
+0013   0000~            #ifdef TI83P
+0014   0000~            COORD   .equ    8A3Ah
+0015   0000~                    .org    progstart-2
+0016   0000~                    .db     $BB,$6D
+0017   0000             #else
+C:/ASM/TASM/zball.z80 line 0018: Forward reference in equate: (STATVARS)
+0018   0000             COORD   =       STATVARS
+C:/ASM/TASM/zball.z80 line 0019: Label not found: (progstart)
+0019   20000                     .org    progstart
+0020   20000             #endif
+0021   20000                     ret
+C:/ASM/TASM/zball.z80 line 0021: unrecognized instruction.          (RET)
+0022   20000                     jr      nc,START 			;jumps to the label START
+C:/ASM/TASM/zball.z80 line 0022: unrecognized instruction.          (JR)
+0023   20000 54 68 65 20         .db     "The Ball By Emir Sakic",0	;The title displayed by ION
+0023   20004 42 61 6C 6C 
+0023   20008 20 42 79 20 
+0023   2000C 45 6D 69 72 
+0023   20010 20 53 61 6B 
+0023   20014 69 63 00 
+0024   20017             
+0025   20017             START:         LD   HL,$0000
+C:/ASM/TASM/zball.z80 line 0025: Label not found: (START)
+C:/ASM/TASM/zball.z80 line 0025: label value misalligned.           (START)
+C:/ASM/TASM/zball.z80 line 0025: unrecognized instruction.          (START)
+0026   20017                            LD   (COORD),HL
+C:/ASM/TASM/zball.z80 line 0026: unrecognized instruction.          (LD)
+0027   20017             
+0028   20017                            bcall(_GRBUFCLR)
+C:/ASM/TASM/zball.z80 line 0028: unrecognized instruction.          (RST)
+C:/ASM/TASM/zball.z80 line 0028: Label not found: (_GRBUFCLR)
+C:/ASM/TASM/zball.z80 line 0028: Label not found: (_GRBUFCLR)
+0028   20017 00 00       
+0029   20019             
+0030   20019             SET_SCREEN1:   LD   HL,PLOTSSCREEN		;sets half LCD black
+C:/ASM/TASM/zball.z80 line 0030: Label not found: (SET_SCREEN1)
+C:/ASM/TASM/zball.z80 line 0030: label value misalligned.           (SET_SCREEN1)
+C:/ASM/TASM/zball.z80 line 0030: unrecognized instruction.          (SET_SCREEN1)
+0031   20019                            LD   DE,PLOTSSCREEN+1
+C:/ASM/TASM/zball.z80 line 0031: unrecognized instruction.          (LD)
+0032   20019                            LD   (HL),$FF
+C:/ASM/TASM/zball.z80 line 0032: unrecognized instruction.          (LD)
+0033   20019                            LD   BC,383
+C:/ASM/TASM/zball.z80 line 0033: unrecognized instruction.          (LD)
+0034   20019                            LDIR
+C:/ASM/TASM/zball.z80 line 0034: unrecognized instruction.          (LDIR)
+0035   20019             
+0036   20019                            LD   H,08h
+C:/ASM/TASM/zball.z80 line 0036: unrecognized instruction.          (LD)
+0037   20019                            LD   L,0Ch
+C:/ASM/TASM/zball.z80 line 0037: unrecognized instruction.          (LD)
+0038   20019             	       LD   IX,TEXT
+C:/ASM/TASM/zball.z80 line 0038: unrecognized instruction.          (LD)
+0039   20019             SET_TEXT:
+0040   20019                            LD   A,H
+C:/ASM/TASM/zball.z80 line 0040: unrecognized instruction.          (LD)
+0041   20019                            ADD  A,8
+C:/ASM/TASM/zball.z80 line 0041: unrecognized instruction.          (ADD)
+0042   20019                            LD   H,A
+C:/ASM/TASM/zball.z80 line 0042: unrecognized instruction.          (LD)
+0043   20019                            PUSH HL
+C:/ASM/TASM/zball.z80 line 0043: unrecognized instruction.          (PUSH)
+0044   20019                            CALL XORSPR
+C:/ASM/TASM/zball.z80 line 0044: unrecognized instruction.          (CALL)
+0045   20019                            POP  HL
+C:/ASM/TASM/zball.z80 line 0045: unrecognized instruction.          (POP)
+0046   20019                            LD   A,1
+C:/ASM/TASM/zball.z80 line 0046: unrecognized instruction.          (LD)
+0047   20019                            CP   (IX)
+C:/ASM/TASM/zball.z80 line 0047: unrecognized instruction.          (CP)
+0048   20019                            JR   NZ,SET_TEXT
+C:/ASM/TASM/zball.z80 line 0048: unrecognized instruction.          (JR)
+0049   20019             
+0050   20019                            XOR  A
+C:/ASM/TASM/zball.z80 line 0050: unrecognized instruction.          (XOR)
+0051   20019                            LD   L,38h
+C:/ASM/TASM/zball.z80 line 0051: unrecognized instruction.          (LD)
+0052   20019             	       LD   IX,CPYRGHT
+C:/ASM/TASM/zball.z80 line 0052: unrecognized instruction.          (LD)
+0053   20019                            CALL XORSPR
+C:/ASM/TASM/zball.z80 line 0053: unrecognized instruction.          (CALL)
+0054   20019                            LD   A,08h
+C:/ASM/TASM/zball.z80 line 0054: unrecognized instruction.          (LD)
+0055   20019                            LD   L,38h
+C:/ASM/TASM/zball.z80 line 0055: unrecognized instruction.          (LD)
+0056   20019             	       LD   IX,CPYRGHT+8
+C:/ASM/TASM/zball.z80 line 0056: unrecognized instruction.          (LD)
+0057   20019                            CALL XORSPR
+C:/ASM/TASM/zball.z80 line 0057: unrecognized instruction.          (CALL)
+0058   20019                            LD   A,10h
+C:/ASM/TASM/zball.z80 line 0058: unrecognized instruction.          (LD)
+0059   20019                            LD   L,38h
+C:/ASM/TASM/zball.z80 line 0059: unrecognized instruction.          (LD)
+0060   20019             	       LD   IX,CPYRGHT+16
+C:/ASM/TASM/zball.z80 line 0060: unrecognized instruction.          (LD)
+0061   20019                            CALL XORSPR
+C:/ASM/TASM/zball.z80 line 0061: unrecognized instruction.          (CALL)
+0062   20019                            LD   A,18h
+C:/ASM/TASM/zball.z80 line 0062: unrecognized instruction.          (LD)
+0063   20019                            LD   L,38h
+C:/ASM/TASM/zball.z80 line 0063: unrecognized instruction.          (LD)
+0064   20019             	       LD   IX,CPYRGHT+24
+C:/ASM/TASM/zball.z80 line 0064: unrecognized instruction.          (LD)
+0065   20019                            CALL XORSPR
+C:/ASM/TASM/zball.z80 line 0065: unrecognized instruction.          (CALL)
+0066   20019             
+0067   20019                            LD   HL,PLOTSSCREEN		;save whole screen as background
+C:/ASM/TASM/zball.z80 line 0067: unrecognized instruction.          (LD)
+0068   20019                            LD   DE,SAVESSCREEN
+C:/ASM/TASM/zball.z80 line 0068: unrecognized instruction.          (LD)
+0069   20019                            LD   BC,768
+C:/ASM/TASM/zball.z80 line 0069: unrecognized instruction.          (LD)
+0070   20019                            LDIR
+C:/ASM/TASM/zball.z80 line 0070: unrecognized instruction.          (LDIR)
+0071   20019             
+0072   20019             MAIN_LOOP:     CALL SP_PUT			;put the sprite on (X,Y)
+C:/ASM/TASM/zball.z80 line 0072: Label not found: (MAIN_LOOP)
+C:/ASM/TASM/zball.z80 line 0072: label value misalligned.           (MAIN_LOOP)
+C:/ASM/TASM/zball.z80 line 0072: unrecognized instruction.          (MAIN_LOOP)
+0073   20019                            CALL ionFastCopy			;put the picture on the LCD
+C:/ASM/TASM/zball.z80 line 0073: unrecognized instruction.          (CALL)
+0074   20019                            CALL DELAY                       ;delay to slow down the ball
+C:/ASM/TASM/zball.z80 line 0074: unrecognized instruction.          (CALL)
+0075   20019                            CALL RESET_SCREEN		;recall the background in PLOTSSCREEN
+C:/ASM/TASM/zball.z80 line 0075: unrecognized instruction.          (CALL)
+0076   20019             
+0077   20019             Go_x:          LD   HL,COORD
+C:/ASM/TASM/zball.z80 line 0077: Label not found: (Go_x)
+C:/ASM/TASM/zball.z80 line 0077: label value misalligned.           (Go_x)
+C:/ASM/TASM/zball.z80 line 0077: unrecognized instruction.          (Go_x)
+0078   20019                            LD   A,(HL)
+C:/ASM/TASM/zball.z80 line 0078: unrecognized instruction.          (LD)
+0079   20019             Bounder_x:
+0080   20019                            CP   88
+C:/ASM/TASM/zball.z80 line 0080: unrecognized instruction.          (CP)
+0081   20019             Jump_x:        CALL Z,Ch_to_left
+C:/ASM/TASM/zball.z80 line 0081: Label not found: (Jump_x)
+C:/ASM/TASM/zball.z80 line 0081: label value misalligned.           (Jump_x)
+C:/ASM/TASM/zball.z80 line 0081: unrecognized instruction.          (Jump_x)
+0082   20019             
+0083   20019             Direction_x:
+0084   20019                            INC  (HL)
+C:/ASM/TASM/zball.z80 line 0084: unrecognized instruction.          (INC)
+0085   20019             
+0086   20019             
+0087   20019             Go_y:          LD   HL,COORD+1
+C:/ASM/TASM/zball.z80 line 0087: Label not found: (Go_y)
+C:/ASM/TASM/zball.z80 line 0087: label value misalligned.           (Go_y)
+C:/ASM/TASM/zball.z80 line 0087: unrecognized instruction.          (Go_y)
+0088   20019                            LD   A,(HL)
+C:/ASM/TASM/zball.z80 line 0088: unrecognized instruction.          (LD)
+0089   20019             Bounder_y:
+0090   20019                            CP   56
+C:/ASM/TASM/zball.z80 line 0090: unrecognized instruction.          (CP)
+0091   20019             Jump_y:        CALL Z,Ch_to_up
+C:/ASM/TASM/zball.z80 line 0091: Label not found: (Jump_y)
+C:/ASM/TASM/zball.z80 line 0091: label value misalligned.           (Jump_y)
+C:/ASM/TASM/zball.z80 line 0091: unrecognized instruction.          (Jump_y)
+0092   20019             
+0093   20019             Direction_y:
+0094   20019                            INC  (HL)
+C:/ASM/TASM/zball.z80 line 0094: unrecognized instruction.          (INC)
+0095   20019             
+0096   20019                            LD   A,$FF			;reset the keypad
+C:/ASM/TASM/zball.z80 line 0096: unrecognized instruction.          (LD)
+0097   20019                            OUT  ($01),A
+C:/ASM/TASM/zball.z80 line 0097: unrecognized instruction.          (OUT)
+0098   20019             
+0099   20019                            DEC  A				;enable Group 2 (with clear key)
+C:/ASM/TASM/zball.z80 line 0099: unrecognized instruction.          (DEC)
+0100   20019             	       DEC  A
+C:/ASM/TASM/zball.z80 line 0100: unrecognized instruction.          (DEC)
+0101   20019                            OUT  ($01),A
+C:/ASM/TASM/zball.z80 line 0101: unrecognized instruction.          (OUT)
+0102   20019             
+0103   20019                            IN   A,($01)
+C:/ASM/TASM/zball.z80 line 0103: unrecognized instruction.          (IN)
+0104   20019             
+0105   20019                            BIT  6,A				;if Clear key pressed (bit #6=0) return
+C:/ASM/TASM/zball.z80 line 0105: unrecognized instruction.          (BIT)
+0106   20019                            RET  Z
+C:/ASM/TASM/zball.z80 line 0106: unrecognized instruction.          (RET)
+0107   20019             
+0108   20019                            JR   MAIN_LOOP
+C:/ASM/TASM/zball.z80 line 0108: unrecognized instruction.          (JR)
+0109   20019             
+0110   20019             Ch_to_left:					;self modifying code
+0111   20019                            XOR  A
+C:/ASM/TASM/zball.z80 line 0111: unrecognized instruction.          (XOR)
+0112   20019             	       LD   (Bounder_x+1),A		;now Bounder line gets: CP 0
+C:/ASM/TASM/zball.z80 line 0112: unrecognized instruction.          (LD)
+0113   20019                            LD   DE,Ch_to_right
+C:/ASM/TASM/zball.z80 line 0113: unrecognized instruction.          (LD)
+0114   20019             	       LD   (Jump_x+1),DE		;now gets JP Z,Ch_to_right
+C:/ASM/TASM/zball.z80 line 0114: unrecognized instruction.          (LD)
+0115   20019             
+0116   20019             	       LD   A,35h			;INC (HL) gets DEC (HL)
+C:/ASM/TASM/zball.z80 line 0116: unrecognized instruction.          (LD)
+0117   20019             	       LD   (Direction_x),A
+C:/ASM/TASM/zball.z80 line 0117: unrecognized instruction.          (LD)
+0118   20019             
+0119   20019                            RET				;go back to modified code
+C:/ASM/TASM/zball.z80 line 0119: unrecognized instruction.          (RET)
+0120   20019             
+0121   20019             Ch_to_right:
+0122   20019                            LD   A,88
+C:/ASM/TASM/zball.z80 line 0122: unrecognized instruction.          (LD)
+0123   20019             	       LD   (Bounder_x+1),A
+C:/ASM/TASM/zball.z80 line 0123: unrecognized instruction.          (LD)
+0124   20019                            LD   DE,Ch_to_left
+C:/ASM/TASM/zball.z80 line 0124: unrecognized instruction.          (LD)
+0125   20019             	       LD   (Jump_x+1),DE
+C:/ASM/TASM/zball.z80 line 0125: unrecognized instruction.          (LD)
+0126   20019             
+0127   20019             	       LD   A,34h
+C:/ASM/TASM/zball.z80 line 0127: unrecognized instruction.          (LD)
+0128   20019             	       LD   (Direction_x),A
+C:/ASM/TASM/zball.z80 line 0128: unrecognized instruction.          (LD)
+0129   20019             
+0130   20019                            RET
+C:/ASM/TASM/zball.z80 line 0130: unrecognized instruction.          (RET)
+0131   20019             
+0132   20019             Ch_to_up:
+0133   20019                            XOR  A
+C:/ASM/TASM/zball.z80 line 0133: unrecognized instruction.          (XOR)
+0134   20019             	       LD   (Bounder_y+1),A
+C:/ASM/TASM/zball.z80 line 0134: unrecognized instruction.          (LD)
+0135   20019                            LD   DE,Ch_to_down
+C:/ASM/TASM/zball.z80 line 0135: unrecognized instruction.          (LD)
+0136   20019             	       LD   (Jump_y+1),DE
+C:/ASM/TASM/zball.z80 line 0136: unrecognized instruction.          (LD)
+0137   20019             
+0138   20019             	       LD   A,35h
+C:/ASM/TASM/zball.z80 line 0138: unrecognized instruction.          (LD)
+0139   20019             	       LD   (Direction_y),A
+C:/ASM/TASM/zball.z80 line 0139: unrecognized instruction.          (LD)
+0140   20019             
+0141   20019                            RET
+C:/ASM/TASM/zball.z80 line 0141: unrecognized instruction.          (RET)
+0142   20019             
+0143   20019             Ch_to_down:
+0144   20019                            LD   A,56
+C:/ASM/TASM/zball.z80 line 0144: unrecognized instruction.          (LD)
+0145   20019             	       LD   (Bounder_y+1),A
+C:/ASM/TASM/zball.z80 line 0145: unrecognized instruction.          (LD)
+0146   20019                            LD   DE,Ch_to_up
+C:/ASM/TASM/zball.z80 line 0146: unrecognized instruction.          (LD)
+0147   20019             	       LD   (Jump_y+1),DE
+C:/ASM/TASM/zball.z80 line 0147: unrecognized instruction.          (LD)
+0148   20019             
+0149   20019             	       LD   A,34h
+C:/ASM/TASM/zball.z80 line 0149: unrecognized instruction.          (LD)
+0150   20019             	       LD   (Direction_y),A
+C:/ASM/TASM/zball.z80 line 0150: unrecognized instruction.          (LD)
+0151   20019             
+0152   20019                            RET
+C:/ASM/TASM/zball.z80 line 0152: unrecognized instruction.          (RET)
+0153   20019             
+0154   20019             SP_PUT:
+0155   20019                            LD   HL,COORD
+C:/ASM/TASM/zball.z80 line 0155: unrecognized instruction.          (LD)
+0156   20019                            LD   A,(HL)
+C:/ASM/TASM/zball.z80 line 0156: unrecognized instruction.          (LD)
+0157   20019                            INC  HL
+C:/ASM/TASM/zball.z80 line 0157: unrecognized instruction.          (INC)
+0158   20019                            LD   L,(HL)
+C:/ASM/TASM/zball.z80 line 0158: unrecognized instruction.          (LD)
+0159   20019                            LD   IX,Pic
+C:/ASM/TASM/zball.z80 line 0159: unrecognized instruction.          (LD)
+0160   20019             
+0161   20019             ;-----> Draw a sprite
+0162   20019             ; b=size of sprite
+0163   20019             ; l=yc
+0164   20019             ; a=xc
+0165   20019             ; ix holds pointer
+0166   20019             XORSPR:
+0167   20019                            LD   B,8                         ;size of the sprite
+C:/ASM/TASM/zball.z80 line 0167: unrecognized instruction.          (LD)
+0168   20019                            CALL ionPutSprite
+C:/ASM/TASM/zball.z80 line 0168: unrecognized instruction.          (CALL)
+0169   20019                            RET
+C:/ASM/TASM/zball.z80 line 0169: unrecognized instruction.          (RET)
+0170   20019             ;------
+0171   20019             
+0172   20019             Reset_Screen:  LD   HL,SAVESSCREEN
+C:/ASM/TASM/zball.z80 line 0172: Label not found: (Reset_Screen)
+C:/ASM/TASM/zball.z80 line 0172: label value misalligned.           (Reset_Screen)
+C:/ASM/TASM/zball.z80 line 0172: unrecognized instruction.          (Reset_Screen)
+0173   20019                            LD   DE,PLOTSSCREEN
+C:/ASM/TASM/zball.z80 line 0173: unrecognized instruction.          (LD)
+0174   20019                            LD   BC,768
+C:/ASM/TASM/zball.z80 line 0174: unrecognized instruction.          (LD)
+0175   20019                            LDIR
+C:/ASM/TASM/zball.z80 line 0175: unrecognized instruction.          (LDIR)
+0176   20019                            RET
+C:/ASM/TASM/zball.z80 line 0176: unrecognized instruction.          (RET)
+0177   20019             
+0178   20019             DELAY:         LD   B,20
+C:/ASM/TASM/zball.z80 line 0178: Label not found: (DELAY)
+C:/ASM/TASM/zball.z80 line 0178: label value misalligned.           (DELAY)
+C:/ASM/TASM/zball.z80 line 0178: unrecognized instruction.          (DELAY)
+0179   20019             LOOP1:         PUSH BC
+C:/ASM/TASM/zball.z80 line 0179: Label not found: (LOOP1)
+C:/ASM/TASM/zball.z80 line 0179: label value misalligned.           (LOOP1)
+C:/ASM/TASM/zball.z80 line 0179: unrecognized instruction.          (LOOP1)
+0180   20019                            LD   B,255
+C:/ASM/TASM/zball.z80 line 0180: unrecognized instruction.          (LD)
+0181   20019             LOOP2:         DJNZ LOOP2
+C:/ASM/TASM/zball.z80 line 0181: Label not found: (LOOP2)
+C:/ASM/TASM/zball.z80 line 0181: label value misalligned.           (LOOP2)
+C:/ASM/TASM/zball.z80 line 0181: unrecognized instruction.          (LOOP2)
+0182   20019                            POP  BC
+C:/ASM/TASM/zball.z80 line 0182: unrecognized instruction.          (POP)
+0183   20019                            DJNZ LOOP1
+C:/ASM/TASM/zball.z80 line 0183: unrecognized instruction.          (DJNZ)
+0184   20019                            RET
+C:/ASM/TASM/zball.z80 line 0184: unrecognized instruction.          (RET)
+0185   20019             
+0186   20019             TEXT:
+0187   20019 08                          .db     %00001000
+0188   2001A 10                          .db     %00010000
+0189   2001B 7E                          .db     %01111110
+0190   2001C 20                          .db     %00100000
+0191   2001D 40                          .db     %01000000
+0192   2001E 80                          .db     %10000000
+0193   2001F 80                          .db     %10000000
+0194   20020 60                          .db     %01100000
+0195   20021             
+0196   20021 08                          .db     %00001000
+0197   20022 10                          .db     %00010000
+0198   20023 20                          .db     %00100000
+0199   20024 70                          .db     %01110000
+0200   20025 48                          .db     %01001000
+0201   20026 88                          .db     %10001000
+0202   20027 88                          .db     %10001000
+0203   20028 90                          .db     %10010000
+0204   20029             
+0205   20029 00                          .db     %00000000
+0206   2002A 78                          .db     %01111000
+0207   2002B C4                          .db     %11000100
+0208   2002C C4                          .db     %11000100
+0209   2002D B8                          .db     %10111000
+0210   2002E 80                          .db     %10000000
+0211   2002F 44                          .db     %01000100
+0212   20030 38                          .db     %00111000
+0213   20031             
+0214   20031 00                          .db     %00000000
+0215   20032 00                          .db     %00000000
+0216   20033 00                          .db     %00000000
+0217   20034 00                          .db     %00000000
+0218   20035 00                          .db     %00000000
+0219   20036 00                          .db     %00000000
+0220   20037 00                          .db     %00000000
+0221   20038 00                          .db     %00000000
+0222   20039             
+0223   20039 FC                          .db     %11111100
+0224   2003A C6                          .db     %11000110
+0225   2003B C2                          .db     %11000010
+0226   2003C FC                          .db     %11111100
+0227   2003D C2                          .db     %11000010
+0228   2003E C2                          .db     %11000010
+0229   2003F FE                          .db     %11111110
+0230   20040 FE                          .db     %11111110
+0231   20041             
+0232   20041 7C                          .db     %01111100
+0233   20042 FE                          .db     %11111110
+0234   20043 C6                          .db     %11000110
+0235   20044 C6                          .db     %11000110
+0236   20045 FE                          .db     %11111110
+0237   20046 FE                          .db     %11111110
+0238   20047 C6                          .db     %11000110
+0239   20048 C6                          .db     %11000110
+0240   20049             
+0241   20049 C0                          .db     %11000000
+0242   2004A C0                          .db     %11000000
+0243   2004B C0                          .db     %11000000
+0244   2004C C0                          .db     %11000000
+0245   2004D C0                          .db     %11000000
+0246   2004E C2                          .db     %11000010
+0247   2004F FE                          .db     %11111110
+0248   20050 FE                          .db     %11111110
+0249   20051             
+0250   20051 C0                          .db     %11000000
+0251   20052 C0                          .db     %11000000
+0252   20053 C0                          .db     %11000000
+0253   20054 C0                          .db     %11000000
+0254   20055 C0                          .db     %11000000
+0255   20056 C2                          .db     %11000010
+0256   20057 FE                          .db     %11111110
+0257   20058 FE                          .db     %11111110
+0258   20059             
+0259   20059 01                          .db     %00000001
+0260   2005A             
+0261   2005A             CPYRGHT:
+0262   2005A 00                          .db     %00000000
+0263   2005B 00                          .db     %00000000
+0264   2005C 20                          .db     %00100000
+0265   2005D 50                          .db     %01010000
+0266   2005E 55                          .db     %01010101
+0267   2005F 26                          .db     %00100110
+0268   20060 58                          .db     %01011000
+0269   20061 80                          .db     %10000000
+0270   20062             
+0271   20062 00                          .db     %00000000
+0272   20063 00                          .db     %00000000
+0273   20064 48                          .db     %01001000
+0274   20065 C4                          .db     %11000100
+0275   20066 44                          .db     %01000100
+0276   20067 28                          .db     %00101000
+0277   20068 10                          .db     %00010000
+0278   20069 60                          .db     %01100000
+0279   2006A             
+0280   2006A 00                          .db     %00000000
+0281   2006B 73                          .db     %01110011
+0282   2006C 85                          .db     %10000101
+0283   2006D 45                          .db     %01000101
+0284   2006E 27                          .db     %00100111
+0285   2006F 15                          .db     %00010101
+0286   20070 15                          .db     %00010101
+0287   20071 E5                          .db     %11100101
+0288   20072             
+0289   20072 00                          .db     %00000000
+0290   20073 53                          .db     %01010011
+0291   20074 55                          .db     %01010101
+0292   20075 55                          .db     %01010101
+0293   20076 67                          .db     %01100111
+0294   20077 55                          .db     %01010101
+0295   20078 55                          .db     %01010101
+0296   20079 55                          .db     %01010101
+0297   2007A             
+0298   2007A             PIC:           
+0299   2007A 3C                          .db     %00111100
+0300   2007B 7E                          .db     %01111110
+0301   2007C FF                          .db     %11111111
+0302   2007D FF                          .db     %11111111
+0303   2007E FF                          .db     %11111111
+0304   2007F FF                          .db     %11111111
+0305   20080 7E                          .db     %01111110
+0306   20081 3C                          .db     %00111100
+0307   20082             
+0308   20082             .end
+0309   20082             ENDtasm: Number of errors = 192
