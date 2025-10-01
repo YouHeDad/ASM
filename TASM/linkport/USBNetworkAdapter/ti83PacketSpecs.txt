@@ -1,0 +1,121 @@
+ III) Data transfers
+===================
+        3.1) Handshaking
+        ----------------
+
+In the most cases, the protocol is the following.
+
+
+
+* In receiving (TI -> PC):
+
+1 - PC: REQ           request variable
+2 - TI: ACK           continue      (d2?)
+3 - TI: VAR           var header
+4 - PC: ACK           continue
+5 - PC: CTS           wait data
+6 - TI: ACK           continue
+7 - TI: XDP           data part
+8 - PC: ACK           end of transfer
+
+If they are several variables, repeat the 1 to 7 steps. It seems that
+step 8 is not used on the TI86.
+
+* In sending (PC -> TI):
+
+1 - PC: VAR or RTS      var header (name, type, ...)
+2 - TI: ACK             continue    // d2?
+3 - TI: CTS             wait data
+4 - PC: ACK             continue
+5 - PC: XDP             data part
+6 - TI: ACK             continue
+7 - PC: EOT             end of transmission
+8 - TI: ACK             end of transfer
+
+
+
+
+
+
+ +--Machine ID=Computer linked to TI-86
+                             |  +--Command ID=Skip/Exit
+                             |  |   +--Data length=0001 bytes
+                             |  |   |    +--Data=01 (Exit pressed)
+                             |  |  / \   | Checksum=0001
+A typical packet would be:  03 36 01 00 01 01 00
+
+
+Offset  Length  Sortcuts  Description
+-------------------------------------------------------- 
+0       1       MID       Machine ID  (03 = pc->ti83, 83 = ti83->pc)
+1       1       CID       Command ID
+2       2       Pl        Packet length of data in bytes if data attached
+4       n       DATA      Data if attached
+4+n     2       CHK       Checksum if data attached. The checksum is the sum 
+			              of all bytes of data (CHK <-> {Cl Ch}).
+
+
+Command ID byte: specifies the type of packet that it is.
+
+Legend:
+* means there is data attached.
+# means the device id is ignored with this command.
+$ means it's a silent command.
+
++----+-----+------------+----------------------------------------------------+
+| ID | Leg | Shortcuts  | Description                                        |
++----+-----+------------+----------------------------------------------------+
+| 06 | *-- | VAR        | Includes a std variable header (used in receiving) |
+| 09 | --- | CTS	    | Used to signal OK to send a variable               |
+| 15 | *-- | XDP	    | Xmit Data Packet (pure data)                       |
+| 36 | *-- | SKIP/EXIT  | Skip/exit - a one byte rejection code (*)          |
+| 56 | --- | ACK/OK     | Acknowledgment                                     |
+| 5A | --- | ERR        | Checksum error: send last packet again             |
+| 6D | --$ | SCR        | Request screenshot                                 |
+| 92 | --- | EOT/DONE   | End Of Transmission: no more variables to send     |
+| A2 | *-$ | REQ        | Request variable - includes a standard variable    |
+| C9 | *-$ | RTS        | Request to send - includes a padded variable header|
++----+-----+------------+----------------------------------------------------+
+
+
+(*) Rejection codes:
+
++-------+-------------------------------------------------------+
+| Value | Description                                           |
++-------+-------------------------------------------------------+
+| 01    | EXIT, the entire transfer has been cancelled          |
+| 02    | SKIP, the current var has been skipped by the user    |
+| 03    | MEM, out of memory                                    |
++-------+-------------------------------------------------------+
+
+PID
+
+PID stands for Packet ID. This field is used to identify the type of packet that is being sent. The following table shows the possible values.
+
+Group	PID Value	Packet Identifier
+Token:	
+0001	OUT
+1001	IN
+0101	SOF 
+1101	SETUP 
+
+Data:	
+0011	DATA0
+1011	DATA1
+0111	DATA2
+1111	MDATA
+
+Handshake:	
+0010	ACK Handshake
+1010	NAK Handshake
+1110	STALL Handshake
+0110	NYET (No Response Yet)
+Special:
+1100	PREamble
+1100	ERR
+1000	Split
+0100	Ping
+
+There are 4 bits to the PID, however to insure it is received correctly, the 4 bits are complemented
+ and repeated, making an 8 bit PID in total. The resulting format is shown below.
+

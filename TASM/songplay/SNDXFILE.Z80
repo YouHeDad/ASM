@@ -1,0 +1,157 @@
+; X-Files SONG
+; D'apres le fichier MIDI
+; Nombre apres les notes indique l'octave...
+; Nombre entre () indique la duree (4:ronde, 1:noire)
+
+
+;PLAY "<B->FE-FG+L1F L2N0L4N0"
+;PLAY "<B->FE-FB-L1F L2N0L4N0"
+;PLAY ">C+C<B-G+B-L1F L2N0L4N0"
+;PLAY ">C+C<B-G+>C<L1F L2N0L4N0"
+;PLAY "<B->FE-FG+L1F L2N0L4N0"
+;PLAY "<B->FE-FB-L1F L2N0L4N0"
+;PLAY "B-L1F"
+; 
+; SIb2  Fa3   Mib3  Fa3   Sol#3 Fa3(4) ; Silence(3)
+; SIb2  Fa3   Mib3  Fa3   Sib3  Fa3(4) ; Silence(3)
+; Do#4  Do4   Sib3  Sol#3 Sib3  Fa3(4) ; Silence(3)
+; Do#4  Do4   Sib3  Sol#3 Do4   Fa3(4) ; Silence(3)
+; SIb2  Fa3   Mib3  Fa3   Sol#3 Fa3(4) ; Silence(3) (pareil qu'au debut)
+; SIb2  Fa3   Mib3  Fa3   Sib3  Fa3(4) ; Silence(3) (re-idem)
+; Sib3  Fa3(4)
+
+;Frequences
+Sib1_HL	.equ	491
+Dod2_HL	.equ	412
+Fa2_HL	.equ	326
+Fad2_HL	.equ	308
+Sib2_HL	.equ	244
+Mib3_HL	.equ	181
+Fa3_HL	.equ	161
+Sold3_HL	.equ	135
+Sib3_HL	.equ	120
+Do4_HL	.equ	106
+Dod4_HL	.equ	100
+Pause_HL	.equ	  1
+
+;DE pour 1/2 seconde
+Sib1_DE	.equ	233
+Dod2_DE	.equ	277
+Fa2_DE	.equ	350
+Fad2_DE	.equ	370
+Sib2_DE	.equ	465
+Mib3_DE	.equ	624
+Fa3_DE	.equ	699
+Sold3_DE	.equ	830
+Sib3_DE	.equ	931
+Do4_DE	.equ	1049
+Dod4_DE	.equ	1110
+Pause_DE	.equ	23256
+
+
+;Erie Sound
+; Sib1(.33) Do#2(.33) Fa2(.33) Fa#2 ;; Sib 2 ;;
+  .word Sib1_HL, Sib1_DE/3
+  .word Dod2_HL, Dod2_DE/3
+  .word Fa2_HL,  Fa2_DE/3
+  .word Fad2_HL, Fad2_DE
+  .word Pause_HL, Pause_DE*2
+  .word Sib2_HL, Sib2_DE
+  .word Pause_HL, Pause_DE*2
+
+
+; Tempo= 1/2 seconde...
+; SIb2  Fa3   Mib3  Fa3   Sol#3 Fa3(4) ; Silence(3)
+  .word Sib2_HL, Sib2_DE
+  .word Fa3_HL, Fa3_DE
+  .word Mib3_HL, Mib3_DE
+  .word Fa3_HL, Fa3_DE
+  .word Sold3_HL, Sold3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+;Erie Sound
+; Sib1(.33) Do#2(.33) Fa2(.33) Fa#2 ;
+  .word Sib1_HL, Sib1_DE/3
+  .word Dod2_HL, Dod2_DE/3
+  .word Fa2_HL,  Fa2_DE/3
+  .word Fad2_HL, Fad2_DE
+  .word Pause_HL, Pause_DE
+
+; SIb2  Fa3   Mib3  Fa3   Sib3  Fa3(4) ; Silence(3)
+  .word Sib2_HL, Sib2_DE
+  .word Fa3_HL, Fa3_DE
+  .word Mib3_HL, Mib3_DE
+  .word Fa3_HL, Fa3_DE
+  .word Sib3_HL, Sib3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+  .word Pause_HL, Pause_DE*2
+  .word Pause_HL, Pause_DE     ; Silence(3)
+
+; Do#4  Do4   Sib3  Sol#3 Sib3  Fa3(4)  ; Silence(3)
+  .word Dod4_HL, Dod4_DE
+  .word Do4_HL, Do4_DE
+  .word Sib3_HL, Sib3_DE
+  .word Sold3_HL, Sold3_DE
+  .word Sib3_HL, Sib3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+;Erie Sound
+; Sib1(.33) Do#2(.33) Fa2(.33) Fa#2 ;
+  .word Sib1_HL, Sib1_DE/3
+  .word Dod2_HL, Dod2_DE/3
+  .word Fa2_HL,  Fa2_DE/3
+  .word Fad2_HL, Fad2_DE
+  .word Pause_HL, Pause_DE
+  
+; Do#4  Do4   Sib3  Sol#3 Do4   Fa3(4)  ; Silence(3)
+  .word Dod4_HL, Dod4_DE
+  .word Do4_HL, Do4_DE
+  .word Sib3_HL, Sib3_DE
+  .word Sold3_HL, Sold3_DE
+  .word Do4_HL, Do4_DE
+  .word Fa3_HL, Fa3_DE*4
+
+;Erie Sound
+; Sib1 ;;
+  .word Sib1_HL, Sib1_DE
+  .word Pause_HL, Pause_DE*2
+
+; SIb2  Fa3   Mib3  Fa3   Sol#3 Fa3(4) ; Silence(3)
+  .word Sib2_HL, Sib2_DE
+  .word Fa3_HL, Fa3_DE
+  .word Mib3_HL, Mib3_DE
+  .word Fa3_HL, Fa3_DE
+  .word Sold3_HL, Sold3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+;Erie Sound
+; Sib1(.33) Do#2(.33) Fa2(.33) Fa#2 ;
+  .word Sib1_HL, Sib1_DE/3
+  .word Dod2_HL, Dod2_DE/3
+  .word Fa2_HL,  Fa2_DE/3
+  .word Fad2_HL, Fad2_DE
+  .word Pause_HL, Pause_DE
+
+; SIb2  Fa3   Mib3  Fa3   Sib3  Fa3(4) ; Silence(3)
+  .word Sib2_HL, Sib2_DE
+  .word Fa3_HL, Fa3_DE
+  .word Mib3_HL, Mib3_DE
+  .word Fa3_HL, Fa3_DE
+  .word Sib3_HL, Sib3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+  .word Pause_HL, Pause_DE*2
+  .word Pause_HL, Pause_DE            ; Silence(3)
+
+; Sib3  Fa3(4)
+  .word Sib3_HL, Sib3_DE
+  .word Fa3_HL, Fa3_DE*4
+
+;Erie Sound
+; Sib1
+  .word Sib1_HL, Sib1_DE
+
+; Fin
+  .word 1, 0 ; Fin
+.END

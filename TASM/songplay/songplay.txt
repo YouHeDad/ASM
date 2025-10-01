@@ -1,0 +1,54 @@
+-------------------------------------------------------------------------------
+                              Song Player                         V1.0 28/10/97
+                         by DHORDAIN Florent
+-------------------------------------------------------------------------------
+
+  Here is a small song player on the TI-83 (the first I think). This works with
+an earphone plugged in the link-port (a piezzo buzzer, etc), or with an AM ra-
+dio...
+
+To make it work:
+---------------
+
+  Send group SONGPLAY.83g and one or more song(s) (SNDXFILE.83p) to your calc
+  Run program SONGPLAY
+  Enter the name of the song (SNDXFILE)
+  And enjoy =)
+
+You can exit at any time by pressing [Clear].
+
+  Note : Don't try to plug a 3.5mm jack into your link-port ! I'm not 
+responsible of what could happen to your calc !
+
+  I use a small piezo buzzer (without internal oscillator), with a half link 
+cable : connect one pin of the piezo to the ground ( the cooper wire ), and the
+other to the data wire ( the white or the red, it doesn't matter )
+
+
+Features:
+--------
+
+ * Multi-song abalities (just give the name of the song).
+ * Few memory wasted (the songs are squished. You can squish the program
+  ZSNGPLAY : I haven't squished the program, bacause it's smaller than the size
+  taken by ZASMLOAD and the squished program).
+
+
+How to make your songs:
+----------------------
+  I've planned to write a tool that could make a song ready to send, but it
+isn't finished yet... But you can make your song using the NOTES.TXT table, and
+writing a program for TASM like this:
+
+  .word What_to_load_in_HL, What_to_load_in_DE
+
+Note: don't forget to put a word 0,0 at the end of your program, or your calc
+      should freeze...
+
+and then assemble and make a TI-83 prog from this... Then you'll have to squish
+it, and you will be able to listen to your creation =)
+
+Author:
+------
+DHORDAIN Florent
+jldhordain@nordnet.fr

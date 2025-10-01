@@ -1,0 +1,48 @@
+USB Packets, communication between computer and network adaptor.
+
+Device:
+    name: Realtek RTL8192EU Wireless LAN 802.11n USB 2.0 Network Adapter
+    type: USB 2.0
+    class: Network Adapter
+    pcAdd {
+        HUBPath: 1
+        USBDevAdd: 5
+        USBDevDestID: 0,5
+    }
+    driver {
+        driverKey: {4d36e972-e325-11ce-bfc1-08002be10318}\0000
+        fileName: rtwlanu.sys
+        infoFile: netrtwlanu.inf
+        }
+
+Packets:
+    transmit Channel:
+        host -> deviceID.DeviceID2.#
+    receive Channel:
+        deviceID.DeviceID2.#  -> host
+
+struct urb {
+  struct list_head urb_list;
+  struct list_head anchor_list;
+  struct usb_anchor * anchor;
+  struct usb_device * dev;
+  struct usb_host_endpoint * ep;
+  unsigned int pipe;
+  int status;
+  unsigned int transfer_flags;
+  void * transfer_buffer;
+  dma_addr_t transfer_dma;
+  struct usb_sg_request * sg;
+  int num_sgs;
+  u32 transfer_buffer_length;
+  u32 actual_length;
+  unsigned char * setup_packet;
+  dma_addr_t setup_dma;
+  int start_frame;
+  int number_of_packets;
+  int interval;
+  int error_count;
+  void * context;
+  usb_complete_t complete;
+  struct usb_iso_packet_descriptor iso_frame_desc[0];
+}; 

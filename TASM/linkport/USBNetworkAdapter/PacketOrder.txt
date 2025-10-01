@@ -1,0 +1,42 @@
+host -> device 
+    -host issues SOF (start of frame) sequence (a continuous poll with an incrementing value for syncing)
+    -device powers on and pulls up D- or D+
+    -host sends a reset sequence to device
+    -device resets, then enters the 'default state' where it can now
+        Default State = After reset but before receiving Set Address.
+        In the Default state, the only valid requests are Get Descriptor, and Set Address. 
+            "The hub performs the required reset processing for that port (see Section 11.5.1.5). When the reset
+            signal is released, the port has been enabled. "
+
+
+
+USB URB
+    [Source: host]
+    [Destination: 1.5.0]
+    USBPcap pseudoheader length: 28
+    IRP ID: 0xffff848611bd2010
+    IRP USBD_STATUS: USBD_STATUS_SUCCESS (0x00000000)
+    URB Function: URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE (0x000b)
+    IRP information: 0x00, Direction: FDO -> PDO
+    URB bus id: 1
+    Device address: 5
+    Endpoint: 0x80, Direction: IN
+        1... .... = Direction: IN (1)
+        .... 0000 = Endpoint number: 0
+    URB transfer type: URB_CONTROL (0x02)
+    Packet Data Length: 8
+    [Response in: 174]
+    Control transfer stage: Setup (0)
+Setup Data
+    bmRequestType: 0x80
+    bRequest: GET DESCRIPTOR (6)
+    Descriptor Index: 0x00
+    bDescriptorType: DEVICE (0x01)
+    Language Id: no language specified (0x0000)
+    wLength: 18
+
+
+0000   1c 00 10 20 bd 11 86 84 ff ff 00 00 00 00 0b 00
+0010   00 01 00 05 00 80 02 08 00 00 00 00 80 06 00 01
+0020   00 00 12 00
+----

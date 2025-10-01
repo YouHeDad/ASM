@@ -1,0 +1,211 @@
+;-----------------------------------------------------------------------------
+;                             Song Player                        V1.0 28/10/97
+;                        by DHORDAIN Florent
+;-----------------------------------------------------------------------------
+;Plays a Song over a connected earphone... on a TI-83 !
+;-----------------------------------------------------------------------------
+;                        (  3*10^6     103  )
+; Frequency : HL = Round ( -------- - ----- )
+;                        (   26*F       26  )
+;
+;                3*10^6
+; Real Freq = -----------
+;              26*HL+103
+;
+; Duree     : DE = Duree * 2 * Freelle
+;
+; Etapes : 1 - Recherche de Str1
+;              Lecture de son contenu
+;          2 - Recherche du programme
+;              Obtient le pointeur sur la chanson
+;          3 - Joue la chanson
+
+;;;;;Types;;;;;
+tStr            .equ 04h
+tProg           .equ 05h
+
+tVARStrng       .equ 0AAh
+
+;;;;;Procedures systemes;;;;;
+_ClrScrnFull    .equ 475Dh
+_HomeUp         .equ 4775h
+_Puts           .equ 470Dh
+_Putc           .equ 4705h
+_vputs		.equ 4781h
+_DispHL		.equ 4709h
+_NewLine        .equ 473Dh
+_chkfindsym     .equ 442Ah
+_zeroOP1        .equ 428Eh
+_ErrUndefined   .equ 467Bh
+_errSyntax	.equ 466Ch
+
+OP1             .equ 8039h
+;;;;;Variables systemes;;;;;
+CURROW		.equ 800Ch
+PENCOL		.equ 8252h
+
+textInverse	.equ 3
+textflags	.equ 5
+
+;;;;;Corps du programme;;;;;
+        .ORG 9327h
+
+;;;;;;;;;;
+                ;Efface tout, en affiche les massages
+Init:
+        CALL _ClrScrnFull
+        CALL _HomeUp
+	SET  textInverse, (IY+textflags)
+	LD   HL, txtTop
+	CALL _puts
+	RES  textInverse, (IY+textflags)
+	LD   HL, 0A02h
+	LD   (PENCOL), HL
+	LD HL, txtAuthor
+	CALL _vputs
+	LD   HL, 1202h
+	LD   (PENCOL), HL
+	LD HL, txtHelp
+	CALL _vputs
+
+;;;;;;;;;;
+Etape1:	; Cherche Str1
+
+        CALL _zeroOP1
+        LD   HL, OP1
+        LD   (HL), tStr
+        INC  HL
+        LD   (HL), tVARStrng
+	; OP1 = 04 AA 00 : Str1
+        CALL _chkfindsym                ; Cherche Str1 : DE -> ptr to data
+        JP   C, _errUndefined           ; Pas trouve Str1
+
+; Str1 trouvee : OK
+	EX   DE, HL
+	LD   C, (HL)
+	INC  HL
+	LD   B, (HL)			; BC = taille de la chaine
+	INC  HL
+; controle de la taille de la chaine... Peut planter la calc. si BC > 8 !
+	LD   A, B
+	OR   A
+	JP   NZ, _errSyntax
+	LD   A, C
+	CP   9
+	JP   NC, _errSyntax		; ERR:SYNTAX si chaine trop grande
+
+	LD   DE, OP1+1
+	LDIR
+	LD   A, 0
+	LD   (DE), A
+	LD   A, tProg
+	LD   (OP1), A			; OP1 = 05 + contenu de Str1 :
+                                        ;       Programme XXXXXXXX
+
+;;;;;;;;;;
+Etape2:
+        CALL _chkfindsym                ; Cherche le prog
+        JP   C, _errUndefined           ; Pas trouve ?
+	EX   DE, HL			; HL -> taille du prog
+	INC  HL
+	INC  HL				; HL -> donnees du prog
+	PUSH HL
+	POP  IX				; IX -> donnees de la chanson
+; On est pret pour jouer la chanson...	
+
+;;;;;;;;;;
+Etape3:
+	LD   HL, 0004h
+	LD   (CURROW), HL
+	LD   HL, txtSong
+	CALL _puts
+	LD   HL, OP1+1
+	CALL _puts
+	LD   HL, 0005h
+	LD   (CURROW), HL
+#IFDEF DEBUG
+	LD   L, (IX+0)
+	LD   H, (IX+1)
+	CALL _DispHL			; Affiche le 1er mot de la chanson
+#ENDIF ;DEBUG
+
+; Initialise le port, etc, etc
+	DI
+	LD   B, 0D0h
+	LD   A, B
+	OUT  (0), A
+
+; Initialise la clavier(keyboard)
+	LD   A, 0FFh
+	OUT  (1), A
+	LD   A, 0FDh
+	OUT  (1), A 
+SongLoop:
+	IN   A, (1)
+	AND  64
+	JR   Z, ExitProg
+	LD   L, (IX+0)
+	INC  IX
+	LD   H, (IX+0)                         ; Charge la periode
+	INC  IX
+	LD   E, (IX+0)
+	INC  IX
+	LD   D, (IX+0)                         ; Et la duree
+	INC  IX
+; DE = 0 <==> fin de la liste ?
+	LD   A, D
+	OR   E
+	JR   Z, ExitProg
+	CALL PlaySound                         ; Fait du bruit
+	JR SongLoop
+
+ExitProg:
+; Initialise le port, etc, etc
+	LD   A, 0D0h
+	OUT  (0), A
+	EI	
+        RET                             ; Voila ! c'est fini.
+
+;;;;;;;;
+; Fait du bruit
+; 26 * HL cycles dans DLoop
+; 103 cycles dans le le reste de SoundLoop
+								;T states
+; Cycles dans:          ;Dloop  ;Le reste...
+
+PlaySound:
+SoundLoop:
+        PUSH HL                 ; 11
+DLoop:
+        DEC  HL         ;  6
+        LD   A, H       ;  4
+        OR   L          ;  4
+        JR   NZ, DLoop  ; 12    ;  7
+        POP  HL                 ; 10
+Play:
+        IN   A, (1)             ; 11
+        AND  64                 ;  7
+        RET   Z                 ;  5
+        LD   A, B               ;  4
+        XOR  00000011b          ;  7
+        LD   B, A               ;  4
+        OUT  (0), A             ; 11
+        DEC  DE                 ;  6
+        LD   A, D               ;  4
+        OR   E                  ;  4
+        JR   NZ, SoundLoop      ; 12
+DonePlay:
+	RET
+
+; Total des cycles:     ; 26    ; 103
+
+;;;;;Messages;;;;;
+;;;;;;		;;;;;;;0123456789ABCDEF
+txtTop		.byte "* Song  Player *",0
+txtAuthor	.byte "By DHORDAIN Florent",0
+txtHelp		.byte "Let ", 0C1h, "Clear] pressed to exit",0
+txtSong		.byte "SONG: ",0
+
+.END
+
+

@@ -1,0 +1,44 @@
+;-------------------------------------------------------------------------
+;h3lL0w0121D - by M1nzfrischer
+;
+;
+;       (C)2024
+;
+;-------------------------------------------------------------------------
+
+   .nolist              ;\
+   #include "ion.inc"   ; \
+   .list                ;  \
+#ifdef TI83P            ;   \
+   .org  progstart-2    ;    | Standard Ion
+   .db   $BB,$6D        ;   /  Program Header
+#else                   ;  /
+   .org  progstart      ; /
+#endif                  ;/
+   ret                  ; use xor a if libraries are not used
+   jr    nc,start       ; jump to the start
+                        ; of the program
+   .db   "h3lloworld by m1nzfrischer",0
+
+START:        
+            ; bcall(_GrBufClr)
+         ld hl,Hello ; Loads the address that points to "Hello World" into register hl (16-bit)
+         ld a, 2
+         xor a
+         xor a
+         xor 3
+         xor 4
+         
+          bcall(_PutS) ; Displays "Hello World" on the screen
+         ret ; Pops the last value pushed onto the stack into the program execution register
+ ; May be used to end the program depending on what's on the stack
+
+Hello: ; Gives the label an equate address in memory
+.db "Hello World!",0 ; The hex values of "Hello World" are stored in program data
+
+
+
+
+ 
+.end
+end
