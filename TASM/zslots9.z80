@@ -1,0 +1,5484 @@
+;-------------------------------------------------------------------------
+;Slots - by M1nzfrischer && ______
+;
+;
+;       (C)2025
+;
+;-------------------------------------------------------------------------
+;
+;
+;TODO:
+;9/21:
+; [ ] simulate 1 million plus spins via the same rng algo and print results - 
+;     insights needed:
+;       [ ] how often will the player go broke under normal circumstances?
+;       [ ] do high value symbols and bonuses put the player ahead of the bleed curve?
+;       [ ] does the player win/lose too often?  
+;       [ ] are low probability events beyond the possibility of a standard buy-in?
+
+;2/16:
+;can save a full animated spin into slot_fin_state
+;  [ ]get 2nd spin forward working
+;  [ ]re-impl win check & anim
+;[ ] create a more general to-draw function, that draws, not just board state, but
+;       [ ] can draw from an array of coordinates that map to 
+;        drawCol 1 2 3 4 5 xx  ;1 draws winBox, 0 skips
+;            [ ] 0 1 0 1 0 00  ;row 1
+;                1 0 1 0 1 00  
+;                0 1 0 1 0 00
+;
+;[ ] how much does 100% largeIonSprite affect performance?
+;
+;[ ] re-seed the RNG with variable contents of calc (userVars etc)
+;[ ] remove fastCopy and replace with ionFastCopy(if fastCopy isn't modified).  Modified?  N                  
+;[ ] add	a,(64/2)-(32/2) ;self modification division to solve symbol ratio performance()
+;[ ] all lines marked with ##, FIX for 16byte accuracy.(when L > $FF, requiring full HL addr.)
+;[ ] self mod HL, BC, Offset macro?
+;[ ] make sure IY usage isn't destorying system VARs.
+;[ ] make sure all memory wipes are accurate (win_anim_array & win_states_)
+;[ ] log symbol also in slot_win_states?     (symbol, line#, inArow) (x, y) too? so anim_wins is easier.
+;[ ] how to clear stack & exit cleanly?
+;[ ] FIREBALLS? 
+;[ ] spin with the winner, win with the spinner
+;[ ] draw line through winning payline being animated | or win box?
+;[ ] turn off split screen modes to ensure lines draw correctly always
+;[ ] merge ANDSrite, XORSprite & ORSprite into same routine - should take a parameter
+;[ ]* move all clearable memory on-top of eachother, so we can LDIR them all in 1 command.
+;[ ]* getSysInfo system command to retrieve real calculator's unique product code, etc.
+
+;//////////////////test commands\\\\\\\\\\\\\\\\\\\\
+; ei \ halt
+;Pause:
+;  DI                  ; disable interrupts
+;  LD  A, 01           ; bit 3 = lcd status
+;  OUT ($03), A        ; bit 0 = ON-interrupt status
+;  EI                  ; enable interrupts
+;  HALT                ; wait for ON (that's the only interrupt)
+;  RET
+
+   .nolist              ;\
+   #include "ion.inc" 
+   ;#include "ion8x.inc"
+   ;#include "ti83plus.inc"  ; \
+   .list                ;  \
+#ifdef TI83P            ;   \
+   .org  progstart-2    ;    | Standard Ion
+   .db   $BB,$6D        ;   /  Program Header
+#else                   ;  /
+   .org  progstart      ; /
+#endif                  ;/
+   ret                  ; use xor a if libraries are not used
+   jr    nc,start       ; jump to the start
+                        ; of the program
+   .db   "zslots by m1nzfrisher",0
+COORD   .equ    8A3Ah
+
+#define debug
+
+
+START:         
+
+               LD    (startSP), SP                 ;save the originating stack pointer for debugging & clean exits
+               SET   textWrite, (IY+sgrflags)      ;set flag to write text to grbuffer, not screen.
+               SET   textInverse, (IY+textFlags)   ;invert text
+               SET   preClrForMode, (IY+newDispF) ;preclear space for text
+              ; SET   0, (IY + 60)                  ;IY+60=plotflags3, b0=bufferOnly
+Begin:         LD   HL,$0000
+               LD   (COORD),HL
+               ld hl, bg_anim_3
+               ld (nft_anim_p), hl 
+               ;turn flags off
+              ; call printQRCode
+               CALL updateBet
+
+;turn off interrupts
+               di
+
+;Set the calc to the highest speed
+               ;in a,(2)
+               ;rla
+               ;sbc a,a
+               ;out (20h),a 
+backFromBonus:
+               bcall(_GrBufClr)                    ;clear graph buffer(plotSScreen)
+               ;LD   HL,PLOTSSCREEN		;sets half LCD black
+               ;LD   DE,PLOTSSCREEN+1
+               ;LD   (HL),$FF
+               ;LD   BC,64*12
+               ;LDIR
+
+               jp spin                  ;first game, no animation of spinning
+;make sure there's enough money
+prep_spin:       
+; generate an RNG to determine if this is an NFT eligible spin
+               call resetNFTflags
+               call rng8toA
+               cp $62
+               call z, setNFTeligibleSpin
+
+               ld HL, (new_money)
+               LD (money), HL           
+               ld A, 0
+               ld (cur_win_total), A
+               ld (cur_win_total+1), A
+               inc a
+               ld (cflags), a 
+
+
+;[ ] if in the middle of a current spin
+;[ ] immediately stop reels & save to fin_state
+;[ ] then check wins
+        ;if 1, animate until next enter is pressed
+        ;if 0, isWaiting = 1, spinning =0
+               ld a, (bt_flags)
+               ;counting and waiting = false
+               and %11110011
+               ;spinning is flipped
+               xor %10
+               or  $80        ;turn on clearTop
+               ld (bt_flags), a
+               and %10          
+               jp z, stopSpin
+
+            
+
+update_display:
+               
+               ld hl, bg_anim_run1
+               ld (run_anim_p), hl
+
+
+               LD HL, _NUM_XY_MONEY
+               LD (PenCol), HL   
+               LD HL, (money)     ;HL is now new money +1$  
+               bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	           bcall(_op2toop1)            ;OP2 to OP1   
+	           bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+
+               call resetBoardMask
+
+               ld a, (bt_flags)
+               res isWin, a
+
+               ld HL, (money)
+               ld DE, (_totalBet)
+               SBC HL, DE
+               ret c
+               ld (money), HL
+               LD (new_money), HL     
+               ;all is refreshed, check if SPIN cancelled a bonus win animation
+               bit isBonus, a
+               ld (bt_flags), a
+               jp nz, begin_BONUS
+
+               LD   HL,win_anim_array		            ;wipe animation array, for next spin
+               LD   DE,win_anim_array+1
+               LD   (HL),$00
+               LD   BC, 24
+               LDIR
+
+               LD   HL,slot_win_states		            ;zero out the mem
+               LD   DE,slot_win_states+1
+               LD   (HL),$0F
+               LD   BC, 53
+               LDIR
+
+
+spin: 
+               ;LD   HL, slot_cur_reel_state         ;set our pointer to beginning of board state
+               ;LD   (data_p+8), HL                    ;hl = value@data.p
+    
+               LD   HL,win_anim_array  		        ;zero out the mem
+               LD   DE,win_anim_array+1
+               LD   (HL),$00
+               LD   BC, 24
+               LDIR
+
+               LD   HL,bonus_loc 		        ;zero out the mem
+               LD   DE,bonus_loc+1
+               LD   (HL),$FF
+               LD   BC, 14
+               LDIR
+
+               ld HL, slot_win_states    
+               ld (data_p+6), HL          ;data_p6 will hold offset for storing data INTO slot_win_states 
+       
+               ;call draw_layer_machine                   ;machine
+               call draw_mask_layer
+               call draw_layer_fillbg_top                ;black out                 
+               bcall(_GrBufCpy)                  ;buffer(plotSScreen) to display
+      
+
+
+               ; show me the money!!------------------------
+               LD     HL, _TEXT_XY_CREDIT               
+               LD     (PenCol), HL              ; PenCol comes before PenRow- 
+              ; LD     HL, symbols+coin+_name
+
+               ;LD hl, $0003
+               ;LD de, 1000
+               ;call mult
+               ;ld DE, (money)
+               ;add HL, DE
+               LD HL, money_string
+               bcall(_VPutS)
+
+
+               LD HL, (money)
+               bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	           bcall(_op2toop1)            ;OP2 to OP1   
+	           bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+
+               call draw_rmenu             
+
+               call genStore_15_rng
+    
+               ld a, (bt_flags)
+               cp isFirstGame
+               jr nz, skip_chk_win
+        
+               ;LD a, $34
+               ;LD (aO), a                   ;update offset into coordinates data for Save_state
+               ;LD HL, (slot_saved_reel_state)
+               ;call chk_win_prep
+
+;have to press spin to get here
+;may also be cancelling isSpinning animation of previous reel
+;Purpose: drop old board 2 full iterations (20 pixels) so there is a smooth transition
+;         into the new board state
+
+;arrays should terminate with $FF
+;-load sprite array offset array into data_p pointer
+
+skip_chk_win:   
+         
+                RES isFirstGame, a 
+                ld (bt_flags), a          
+                ld HL, slot_cur_reel_state
+                ld (data_p+8), HL
+                ;ld HL, win_anim_array
+                ld a, $1A               
+                LD (aO), a
+                jp draw_prep
+                ;ld (WIN_ARRAY_OFF), A      ;0 if anim, $10 if cur_state 
+from_main:      
+
+                ld a, (bt_flags)
+                bit isWaiting, a
+                jp nz, MAIN_LOOP_PREP
+draw_prep:      
+
+skip_Auto_Stop:  
+                
+                ;call draw_layer_machine
+     
+                ld a, (bt_flags)
+                bit isWin, a
+                call z, draw_top_layers              
+                call draw_sarr_at_xarr_yarr
+
+                ld a, (bt_flags)
+                bit clearTop, a
+                call nz, draw_layer_fillbg_top           
+                ;call draw_layer_fillbg_top   
+
+                LD HL, _TEXT_XY_CREDIT
+                LD (PenCol), HL        
+                LD HL, money_string
+                bcall(_VPutS)
+                LD HL, _NUM_XY_MONEY               
+                LD (PenCol), HL              ; PenCol comes before PenRow- 
+                LD HL, (money)
+                bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	            bcall(_op2toop1)            ;OP2 to OP1   
+	            bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+                call ionFastCopy
+
+                ld a, (bt_flags)
+                bit isSpinning, a
+
+                call nz, advance_Spin_Anim
+
+                ;if 
+                ld a, (bt_flags)
+                bit isWin, a
+                jp z, MAIN_LOOP_PREP
+                bit isSpinning, a
+                jp nz, MAIN_LOOP_PREP            
+
+;sudo:
+;WINIMATE()
+;if k>1, JP TIMERLOOP_: (whatever is on screen stays for 9 cicles max)
+;L1: 
+;    clear bottomLeft
+;    disp P6  
+;    p6++
+;    k = 1   
+;     
+;TIMERLOOP_:
+;for (; k<=10, k++)                 ;wait 10
+;    skip to MoneyCounting
+;display next or total? 
+;if (p6[i+1]!=0),                   ;more data to display
+;    update p6?(if not updated)
+;    jp L1                          ;10 more with new data
+
+;ELSE:  (no more data to display, jump to total, wait 10, reset)
+;     clear bottomLeft
+;     disp total
+;     k = 2                     ;will run 9 iterations
+;     p6 = slot_win_states       ;reset p6
+;     fall
+;sudo:
+;WINIMATE()
+;if k>1, JP TIMERLOOP_: (whatever is on screen stays for 9 cicles max)
+;L1: 
+;    clear bottomLeft
+;    disp P6  
+;    p6++
+;    k = 1   
+;     
+;TIMERLOOP_:
+;for (; k<=10, k++)                 ;wait 10
+;    skip to MoneyCounting
+;display next or total? 
+;if (p6[i+1]!=0),                   ;more data to display
+;    update p6?(if not updated)
+;    jp L1                          ;10 more with new data
+
+;ELSE:  (no more data to display, jump to total, wait 10, reset)
+;     clear bottomLeft
+;     disp total
+;     k = 2                     ;will run 9 iterations
+;     p6 = slot_win_states       ;reset p6
+;     fall
+draw_flash_wins:           
+               ;ld a, (bt_flags2)
+               ;and %1
+               ;jr z, notFromBonus
+               ;halt
+               ;halt
+
+
+notFromBonus:
+
+               ;data_p6 holds the start of the win array here. never empty at i=0
+               LD a, (bt_flags)
+               RES clearTop, a
+               ld (bt_flags), a
+
+               LD a, (cflags)
+               cp $01               ;cant check against 0
+               jp nz, timerloop_
+               
+
+               ;draw first winning text
+               LD HL, _TEXT_XY_TOPBC             ;bottom of top(needs to be centered) text
+               LD (PenCol), HL
+               LD HL, top_win_str1
+               bcall(_vPutS)
+               call IONFastCopy             
+dfL1:         
+               call draw_layer_fillbg_low
+               LD HL, _TEXT_XY_WINSTR       ;bottom left align pen
+               LD (PenCol), HL
+               LD HL, bot_win_clear
+               bcall(_vputS)
+               LD HL, _TEXT_XY_WINSTR       ;bottom left align pen
+               LD (PenCol), HL
+
+        ;display p6
+
+               LD HL, (data_p+6)
+               inc hl
+               ld (data_p+6), HL
+               LD A, (HL)            
+
+               bcall(_setxxop1)            ;place A into OP1
+	           bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)          
+                                           ;x in a row                          
+               LD HL, bot_win_str1
+               bcall(_vputS)               ;"3 x "
+               
+               LD HL, (data_p+6)
+               inc HL
+               LD A, (HL)               ;symID
+               inc HL                   ;1st byte of total
+               LD (data_p+6), HL
+               LD HL, slot_sprites
+               ADD A, A                    ;E contains 1-8 result of the rng symbol
+               ADD A, A                    ;(1-8)*8 = sprite offset
+               ADD A, A 
+               ld HL, slot_sprites
+               ld (P_), HL
+               call jumpAfromP_
+               LD A, (penRow)
+               LD L, A
+               LD A, (penCol)
+               call XORSPR
+               LD A, (penCol)
+               ADD A, $0A
+               LD (penCol), A
+                ;cur line win total
+               LD A, '='
+               bcall(_VPutMap)            
+               LD A, ' '
+               bcall(_VPutMap)            
+               LD A, '$'
+               bcall(_VPutMap)          
+
+               LD HL, (data_p+6)            ;translate total into printable HL  
+               LD A, (HL)                   ;1st byte                                                                          
+               INC HL                       ;----
+               LD B, (HL)                   ;2nd byte
+               inc HL 
+               LD (data_p+6), HL            ;update p6 next win or 0F
+               LD L, A                      ;
+               LD A, B                      ;
+               LD H, A                      ; 
+
+
+               bcall(_setxxxxop2)           ;puts 16bit(xxxx) HL into OP2
+	           bcall(_op2toop1)             ;OP2 to OP1   
+	           bcall(_dispop1a)             ;write OP1 to screen, at (PenCol, PenRow)
+
+
+               call IONFastCopy
+
+        ;k = 1
+        ;p6 is pointed to next win item.
+              ld a, 1
+              ld (cflags), a
+timerloop_:    
+              inc a
+              ld (cflags), a
+              cp $40                ;timer betwixt data total displays
+              jr c, NoResetWinText
+                ;1st win displayed. waited 10 cycles.  what are the states?
+                    ;-1st win displayed correctly on screen "3 x K = $45
+                    ;-p6 points to slot_win_states[0]
+             
+
+              ;--waited 10 - next win or total
+              LD HL, (data_p+6)
+              LD A, (HL)
+              cp $0f                ;nz = more wins exist, jump back to dfL1
+              jp nz, dfL1
+;             ELSE:  (no more data to display, jump to total, wait 10, reset)
+dispTotal:      
+        ;display total
+
+              ;call draw_layer_fillbg_low
+              LD HL, _TEXT_XY_WINSTR       ;bottom left align pen
+              LD (PenCol), HL
+              LD HL, bot_win_str2
+              bcall(_vputS)
+        
+              LD HL, (cur_win_total)
+              bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	          bcall(_op2toop1)            ;OP2 to OP1   
+	          bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+              call IONFastCopy            
+        ;k = 2
+              ld a, $02
+              ld (cflags), a
+        ;p6 = slot_win_state
+              ld HL, slot_win_states
+              ld (data_p+6), HL
+
+NoResetWinText:              
+               LD HL, win_anim_array
+               LD (data_p+8), HL
+               ;PUSH HL
+               LD A, $00
+               LD (aO), A 
+               ;CALL DELAY
+
+               ;chk_win turned counting on immediately.  Keep counting until 'MoneyCounted:; is reached
+               ld a, (bt_flags)    
+               and %100         ;isCounting?
+               CALL nz, _count_up
+               ;POP HL
+               ;enter with these lines to skip rng and debug custom board from state.
+
+               ;ld hl, slot_onscreen_state
+               ;ld (data_p), hl
+               ;jr draw_COL
+
+MAIN_LOOP_PREP: 
+                bcall(_getCSC)         ;A = KEY | CSC does not wait for keyPress | returns 0 on nokey pressed|AF/HL die 
+              
+MAIN_LOOP:     
+
+
+	          ;check if [CLEAR] is being pressed
+               ; in a,(1)
+               ; and 40h
+               ; ret z
+                cp $0f
+                call z, smart_exit
+               ; in a,(1)
+                cp 0Ch
+                CALL z,_incMult  
+               ; in a,(1)
+                cp 0Bh
+                CALL z,_decLines
+               ; in a,(1)
+                cp 0Ah
+                CALL z,_incLines
+               ; in a,(1)
+               ; and 10h
+                cp 31h
+                jp z, prep_spin              
+                ;check if [ENTER] is being pressed
+ 
+                
+                jp from_main
+;advancing old symbols down off of the board, animating, dropping new symbols in
+;---symbols are generally turned OFF at this point
+;---HL = pointer to array to be drawn.
+advance_Spin_Anim:
+
+
+               ld a, (reelTimer)
+               cp _GAMESPEED_
+               jr z, copyFrozenReelToFinal
+               
+               ld a, (spinAnimCount)
+               cp $06
+               JR nc, pushBottomRowToTop
+               add a, 6
+               
+               ld (spinAnimCount), a 
+               ret
+pushBottomRowToTop:
+
+                ld a, 0
+                LD (spinAnimCount), a
+                ld a, (reelTimer)
+                inc a
+                ld (reelTimer), a
+
+                ;we want to shift, draw, then save -> mandate autostop
+                call rotate_5x5
+                ;put bottom
+ 
+                ld a, (reelTimer)
+                cp $0E           ;how many spins before reel autostops
+                ret nz
+                ;a reel has autostopped
+skipNextShift:  ld a, 1
+                ld a, (spinningReelNo)
+                inc a
+                ld b, a
+                ld (spinningReelNo), a
+                cp $05
+                jp nc, quitSpinning_checkWin
+                ld a, 0
+                ld (reelTimer), a              
+
+                call mpl
+                LD (data_p+8), IX       ;get draw pointer to new offset mem.addr.
+                ;LD HL, (data_p+8)
+                ;LD (data_p), HL
+
+                ;ANDsprite Xcoord gets shifted right 16bits
+                ;so that only spinning reels get spun
+
+                LD a, (maskXYWH)
+                add a, $10
+                LD (maskXYWH), a
+                LD a, (maskXYWH+2)
+                sub 16
+                ld (maskXYWH+2), a
+                ret
+
+;HL+(5b)->IX->(data_p+8)
+;preconditions:
+;   b=multiplier
+;   a=0
+                       
+
+copyFrozenReelToFinal:
+                ld a, (spinningReelNo)
+                inc a
+                ld b, a
+                ld a, 0
+                call mpb       
+                LD (P_), IX     
+                LD HL, (P_)
+
+                LD BC, $0034
+                SBC HL, BC
+                EX  DE, HL
+                LD HL, (P_)
+                LD BC, 5
+                LDIR                 
+   
+                jr skipNextShift
+
+mpl:            add a, 5
+mpb:            
+                DJNZ mpl
+
+                ;[ ] need to move the locked column into a staging area ()
+                ld   HL, slot_cur_reel_state
+                ld   (P_), HL
+                call jumpAfromP_
+                ret
+
+stopSpin:       
+                ;save rest of board over to fin_state
+                ;wherever datap+8 is, copy rest
+                ;it will draw the rest when we turn isSpinning off
+                LD HL, slot_cur_reel_state+26
+                LD DE, (data_p+8)
+                SBC HL, DE
+                ld A, L
+                LD HL, (data_p+8)
+                LD BC, $0034
+                SBC HL, BC
+                EX DE, HL
+                LD HL, (data_p+8)
+                ld B, 00h
+                ld C, A
+                LDIR
+                LD HL, slot_fin_reel_state
+                LD (data_p+8), HL
+
+                call  resetBoardMask         ;spin cancelled, clear board & redraw
+                call  draw_mask_layer
+                call  IONfastCopy
+                ld a, $4E
+                ld (aO), a     ;offset to draw fin_state x,y's
+                ;call draw_sarr_at_xarr_yarr
+                ;call IONfastCopy
+                call quitSpinning_checkWin
+
+                jp draw_prep
+
+
+quitSpinning_checkWin:
+;isFirstGame:    .EQU     0
+;isSpinning:     .EQU     1
+;isCounting:     .EQU     2
+;isWaiting:      .EQU     3
+;isWin:          .EQU     4
+                ld a, 0
+                ld (spinningReelNo), a
+                ld (reelTimer), a
+                ld (spinAnimCount), a
+
+                call chk_win_prep          ;the only place checkWin is invoked.  Only way to set isWin
+
+                ld a, (bt_flags)
+                res isSpinning, a
+                bit isWin, a
+                ld (bt_flags), a
+                ret nz
+                or %1000                    ;isWaiting = true if no win
+                ld (bt_flags), a
+
+
+resetBoardMask:
+                ld a, $00
+                ld (maskXYWH), a
+                ld a, $16
+                ld (maskXYWH+1), a
+                ld a, $50
+                ld (maskXYWH+2), a
+                ld a, $20
+                ld (maskXYWH+3), a
+
+
+                ret
+
+;take bottom 1 rows, move to top
+;shift top 3 rows down 2.
+rotate_5x5:     
+                LD HL, slot_cur_reel_state+20
+                LD DE, slot_saved_reel_state+20
+                LD BC, 5
+                LDIR
+                LD HL, slot_cur_reel_state+23
+                LD DE, slot_cur_reel_state+24
+                LD BC, 24
+                LDDR
+                LD HL, slot_saved_reel_state+20
+                LD DE, slot_cur_reel_state
+                LD BC, 5
+                LDIR   
+                ret
+
+SINGLE_BET:
+               RET
+DOUBLE_BET:
+               RET
+
+SPIN_ENTER:
+               ;initialize x
+               LD  HL, COORD
+               LD  A, 12
+               LD (COORD), a
+
+SPIN_RESET:
+
+REEL1:
+               LD HL, COORD+1
+               LD A, 23
+               LD (HL), A
+               LD IX,slot_sprites
+
+SPIN_LOOP:      
+               ;prep registers for display
+               LD   HL,COORD
+               LD   A,(HL)
+               INC  HL
+               LD   L,(HL)
+               ld   B, 8                ;Large Sprite height
+               ld   C, 1                ;Large Sprite width
+               CALL XORSPR               
+
+               ;lets go vertical
+               LD HL, COORD
+               LD A, 16
+               ADD A, (HL)
+               LD (COORD), A
+               CP 92
+               CALL Z, SPIN_RESET_X
+
+               LD HL, COORD+1
+               INC (HL)
+               LD A, (COORD+1)
+               CP 53
+               CALL Z, SPIN_RESET
+
+               JR SPIN_LOOP
+
+SPIN_RESET_X:
+
+               LD a, 0Ch
+               LD (COORD), a
+               RET
+
+;checks win conditions against board condition for payable circumstance
+;payrules[9lines][5rules]:          Each rule contains a cur_reel_state offset per payline
+;cur_reel_state:                    current board spun into
+;slot_cur_reel_state:  
+;           1     2    3               5....                       A    B                             ;term 
+;    .db    $02, $03, $04, $02, $03,   $04, $02, $03, $04, $02,    $03, $04, $02, $03, $08,    $0F
+;
+;pay_rules:   
+;    .db    $02, $05, $08, $0B, $0E              ;pay line 1
+;    .db    $01, $04, $07, $0A, $0D              ;         2-3
+;
+chk_win_prep:  
+               ld a, 0
+               ld (COORD), a    ;y axis of 2D array
+CHK_WIN:   
+;19EC2        
+
+               LD HL, pay_rules
+               ;jump to next row of pay rules    
+
+               LD B, A
+               cp 0            ;check if on the first line *A=slot_win_states[0], first win line#
+               jp z, skip_m
+               ld a, 0          
+mtpl:          
+               add a, 6
+               djnz mtpl       
+skip_m:
+               LD HL, pay_rules
+               LD (P_), HL
+               call jumpAfromP_
+               LD (data_p), IX
+               LD C, 0
+chk_loop:     
+;19EFA
+               LD A,  (IX)                      ;offset aka (rule[i])   
+               DEC A                            ;offsets need to be zero index,
+               LD HL, slot_chk_win_state       
+               LD (P_), HL  
+               call jumpAfromP_     
+               LD A, (IX)            ;A holds first reel symbol to compare**correct
+               cp $09                ;if bonus symbol, skip
+               jr z, bon_skip
+                         
+chk_loop2:
+;19EE7     
+               ld hl, (data_p)  
+               INC hl                ;point to next pay rule  
+               ld (data_p), hl   
+               LD B, A               ;move A temporarily for use in jumpA routine          
+               LD  A, (HL)           ;next offset
+               DEC A                 ;offsets need to be zero index,    
+               LD HL, slot_chk_win_state
+               LD (P_), HL 
+               CALL jumpAfromP_
+;19F03    
+               LD E, (IX)   ;2nd reel to compare
+               INC C
+               LD A, B      ;get 1st compare symbol back into A, for comparison with E              
+               cp E         
+               jr z, chk_loop2
+                        
+               ;a no match condition has been reached.  
+               ld B, A                          ;b = symbolID for saving in win_log
+               ld a, c
+               cp 3                             ;was a win booked before matches ended?
+               call nc, win_log                 ;deal with win & return to find new wins
+              
+bon_skip:      ld HL, COORD                     ;COORD=(statvars)18A3A
+               ld a, (HL)  
+               INC A                            ;go to next set of pay_rules (Ycolumn)
+               ld (COORD), A
+               ld d, a
+               ld a, (_lines)
+               ld b, a
+               ld a, d
+               cp b                             ;no. of paylines
+               jr c, CHK_WIN
+               ;all normal wins are logged   
+               call checkForBonus
+               ld HL, slot_win_states        
+               ld a, (HL)
+               cp $0F
+               call nz, classify_wins
+
+               ret
+
+;checks full board for a bonus condition
+checkForBonus:
+               ;ld a, (bonusCount)
+               ld c, 0
+               ld d, 1              ;counter to identify board position
+               ld IX, bonus_loc     ;pay_rules[A]
+               ld HL, slot_fin_reel_state
+
+               
+bonC_lop_i:    ld b, 3              ;
+               inc d
+               inc d
+               inc HL
+               inc HL
+bonC_lop_j:     ld a, (HL)
+                cp 09h       
+                jp nz, noB
+                inc c 
+                ld (IX), d
+                inc IX             
+noB:            inc HL
+                inc d
+                djnz bonC_lop_j
+               ld a, (HL)
+               cp 0fh 
+               jr z, bonC_end
+               jr bonC_lop_i 
+bonC_end:      ld a, c
+               cp $04                   ;[ ]change to 4 bonus symbols on release copy
+               jr nc, thereIsABonus
+               ret
+
+               ;THERE IS A BONUS
+thereIsABonus: ld a, (bt_flags)
+               or %100000
+               ld (bt_flags), a
+               ld a, 09h        ;line number for bonus (payrule 10-1 for index)
+               ld b, 09h        ;symID
+               call win_log_bonus     ;log the bonus win
+               ret
+
+begin_BONUS:
+    ;save visable board to curstate for board redraw when bonus is over
+    ld hl, slot_fin_reel_state
+    ld de, slot_cur_reel_state
+    ld bc, 25
+    ldir
+
+    ld A, 3
+    ld (heartCount), A
+
+    call draw_layer_fillbg_low
+bonus_start_waiting:   
+    call draw_layer_fillbg_top
+    call IONFastCopy
+    call draw_top_animation
+    ;draw bonus in top_lower
+    ;bottom says, "press ^ to begin"
+    ld HL, _TEXT_XY_TOPBC
+    LD (PenCol), HL
+    LD HL, top_win_BON
+    bcall(_VputS)
+    call IONFastCopy
+
+    ld HL, _NUM_XY_MONEY
+    LD (PenCol), HL
+    LD HL, text_bot_expl1
+    bcall(_VputS)
+    call IONFastCopy
+
+    LD a,%11111101
+    out (1),a
+
+    ;check if [^] is being pressed
+    in a,(1)
+    and 20h
+    jp z, _BONUS
+    jr bonus_start_waiting
+_BONUS:
+    call draw_mask_layer
+    ;call draw_layer_machine
+    call draw_layer_bonus_bg
+_BON_GK:    
+                LD HL, _NUM_XY_BO6
+                LD A, L
+                DEC A
+                DEC A
+                DEC A
+                LD L, H
+                INC L
+                INC L
+                LD B, 8
+                ld c, 3
+                LD IX, bonus_enemy1
+                call ionPutSprite
+                call ionFastCopy
+                LD HL, _NUM_XY_BO6
+                LD A, L
+                inc a
+                inc a
+                inc a
+                inc a
+
+                LD L, H
+                inc l
+
+                LD B, 4
+                ld c, 3
+                LD IX,  misc_sprites_arrow
+                call ionPutSprite
+                call ionFastCopy
+               
+
+
+
+    bcall(_getCSC)         ;A = KEY | CSC does not wait for keyPress | returns 0 on nokey pressed|AF/HL die 
+    cp $13
+    jp z, _BONUS_COUNTDOWN
+    jr _BON_GK
+
+_BONUS_COUNTDOWN:
+    bcall(_GrBufClr)
+    ;call draw_layer_machine
+    ;call draw_mask_layer
+    call draw_top_layers
+    ;call draw_layer_machine
+    ;call draw_layer_fillall
+    call bon_redraw 
+    
+;---------------draw lower lefthand enemy sprite, with initial BOP count = 0
+    ld hl, _NUM_XY_MONEY
+    ld a, l
+    ld l, h
+    ld b, 8
+    ld ix, bonus_enemy1
+    call ionPutSprite
+    ld hl, _NUM_XY_BOPCNT
+    dec l
+    dec l
+    ld (penCol), hl
+    ld A, ':'
+    bcall(_VputMap)
+    ld A, '0'
+    bcall(_VputMap)
+
+;---------------draw lower righthand bonus lvl - intial value 1
+    ld HL, _TEXT_XY_BONLVL 
+    LD (PenCol), HL
+    LD HL, text_bot_bon_lvl
+    bcall(_VputS)
+
+    ld hl, _NUM_XY_BONLVL
+    ld (penCol), hl
+    ld A, '1'
+    bcall(_VputMap)
+
+    ;call draw_layer_fillall
+    call IONFastCopy
+    call delay
+    jr _BONUS_LOAD_ENEMY
+
+_BONUS_ENEMY_SCHEDULER:
+        ;flip coin
+        ; if true, rng1-9
+        ;   spot taken? skip
+        ;   not taken? place enemy on location (frame 1)
+    call rng8toA
+    cp 91h
+    jr nc, _bonLPrep
+_BONUS_LOAD_ENEMY:
+    call rng8toA
+    cp $1C
+    jr c, rngAis8
+    AND  7
+    jr rngAno8
+rngAis8:        
+    ld A, 8
+rngAno8:  
+    ld b, a
+    ld hl, bonusBoard
+    ld (P_), hl
+    call jumpAfromP_
+    ld a, (IX)
+    or %0
+    jp nz, _bonLPrep  ;enemy already in location
+    ld a, (bonusLvl)
+    or %0
+    jp z, lvl1enemy
+    call rng8toA
+    ld b, a
+    ;cp 99h
+    ;jr nc, lvl1enemy
+    ;zxc
+    ld a, (bonusLvl)
+
+    and b 
+    ld (IX+20), a                ;spike baddy
+    jr allEnemyPrep
+lvl1enemy:
+    ld (IX+20), $00   ;enemy type = 0, lvl1 enemy   
+allEnemyPrep:    
+    ld (IX), 01h      ;no enemy in location, place new enemy @ frame1
+_bonLPrep:
+    ld hl, bonusBoard
+    push hl
+;loop through all 9 board spots(hl), 
+;   is sprite done?
+;       animate a miss && -1 heart
+;       ret
+;   is sprite at peek? ret for (enemyTimer)
+;   not at peek?
+;       mask whole position from upperLeft to LowerRight
+;       draw sprite at current frame, in correct adjusted yPos
+;       frame++
+;------------SWATS--------------------------
+;   zero out swatted, missed, & expired positions
+
+;  requires a pushed bonusBoard pointer in hl
+_BONUS_LOOP:
+    pop hl          ;bonusBoard Pointer
+    ld a, (hl)
+    cp $F0
+    jp z, _BONUS_ENEMY_SCHEDULER        ;reached end of BoardChecks, re-cycle
+    or %0
+    jr nz, _drawBonusFrame
+    ;empty position, inc & skip
+    inc hl
+    push hl
+    jr _BONUS_LOOP
+
+;hl contains pointer to frame number of current enemy
+;get xy by: 
+;   (hl - bonusBoard) -> A
+;   call bonusPosAtoXYinHL
+
+_drawBonusFrame:
+;has the baddie gone fully underground?
+    push hl                 ;board location, holds frame#raw, for incrementing frameNo
+        ld a, (hl)              ;rawFrameNo
+        dec a                   ;1st frame = 0 position in frame map (1)
+
+        ld de, bonusBoard
+        sbc hl, de
+        ld c, l                 ;c=board position 123,456,789 
+        ld hl, bonusFrameMap
+        ld (P_), hl
+        call jumpAfromP_        ;(ix) = drawable frame number
+        ld a, (IX)
+        ld b, a
+        push bc                 ;b = drawable frame number, c = board position 0-8
+            ld a, c 
+            call bonusPosAtoXYinHL
+        pop bc
+    pop de
+    push de 
+        push bc 
+            push hl         ;xy
+                ld a, b     ;drawable frame
+                cp 9 
+                jr nz, deleteLastBonusFrame
+                ;at frame peak of 8
+     
+                ld a, 0Ah           ;jump 10 to get timer val
+                ld (P_), de
+                call jumpAfromP_
+                ld a, (IX)
+                dec (IX)
+                ;halt
+                jp nz, checkKeyAgainstFullBoard             ;skip drawing if timer is > 0
+;waiting is over, descend , reset timer 
+                ld a, (enemyTimerMax)
+                ld (IX), a
+            pop hl     ;xy 
+        pop bc          
+        dec b          ;update drawable frame to be 8 for smooth descent
+    pop de  ;pointer
+    ld a, (de)
+    inc a
+    ld (de), a        ;increase rawframe count
+    push de         ;pointer
+        push bc     
+            push hl    ;xy
+;not at peek frame(8)
+;c = boardpos, b = drawable frame#
+deleteLastBonusFrame:
+                ld a, l
+                dec a
+                ld l, a
+                ld a, h  
+                inc a
+                inc a
+
+                ld b, 10
+                ld c, 1
+                ld h, 01h  ;sprite off
+                ld ix, _10x16_off     
+                call put_any_Sprite
+                call IONFastCopy
+            pop hl ; xy board pos
+        pop bc
+        push bc
+            push hl
+                ld a, b
+                cp $F0
+                jp z, late_miss    ;[]reached last frame of animation, user hasn't smashed enemy
+drawCurrentBonusFrame:
+            ;get to center of boardlocation
+            pop hl      ;xy for boardPosition []upperLeft, lowerRight
+        pop bc          ;b = drawable frame#
+    pop de 
+    push de
+        push bc 
+            push hl     ;xy
+                ld a, l
+                add a, 9    ;6 is height of bonus squares-- a = bottom of square
+                sub b        ;a is now adjusted for current frame number
+                ld l, a     ;y updated
+                ld a, h     ;x
+                add a, 5
+                push af         ;updated x
+                ld h, b 
+                    push hl     ;updated b,y
+                        ex de, hl
+                        ld d, 00h
+                        ld e, $14
+                        add hl, de
+                        ld a, (hl)      ;enemy id
+                        ld l, a
+                        ;zzc
+                        ld h, 00h
+                        ld d, 00h
+                        ld e, 08h
+                        call mult 
+                        ld a, l 
+                        ld hl, bonus_enemies
+                        ld (P_), hl
+                        call jumpAfromP_    ;ix now hold correct enemy sprite
+                    pop hl 
+                    ld b, h ;b
+                pop af  ;x
+                call ionPutSprite
+                call IONFastCopy
+            
+checkKeyAgainstFullBoard:
+                ;getCSC will return 0 if no key has been pressed since last call
+                bcall(_getCSC)         ;A = KEY | CSC does not wait for keyPress | returns 0 on nokey pressed|AF/HL die 
+                ld c, a
+                or %0
+                jp z, bGetKeyEnd        ;no key pressed
+                cp 12h
+                jp c, bGetKeyEnd        ;pressed some key off the number board
+                cp 25h
+                jp nc, bGetKeyEnd       ;pressed key off board
+
+                ;pressed 1-9
+                ld b, 0
+                ld hl, kToSK
+keyTOPosition:
+                ld a, (hl)
+                cp $F0
+                jr z, bGetKeyEnd            ;should never reach here.  if 1-9 pressed, we should find it in ktosk
+                cp c
+                jr z, bktoPosFound
+                inc b
+                inc hl
+                jr keyTOPosition
+;b = position corresponding to key pressed
+bktoposFound:
+;check if position contains enemy
+                ld a, b
+                push af         ;position of pressedKey [0-8]
+                    call bonusposAtoxyinhl  ;new xy for animating
+                pop af 
+            pop de              ;xy of board[i]
+            push hl             ;replace with new xy
+                ld hl, bonusBoard
+                ld (P_), hl
+                call jumpAfromP_
+                ld a, (IX)          ;position of pressed key
+                or %0               ;has enemy?
+                jp z, smash_miss
+                ;hit
+                push ix             ;ix = bonusboard[i]
+                    ;ld b, 00h
+                    ;ld c, $14
+                    ;add ix, bc
+                    ld a, (IX+20)
+                pop ix
+                cp $01              ;is spikey?
+                jp nz, smashed_enemy
+                ld a, $0F               ;hit spikey code
+                jp smash_miss
+smashed_enemy:  
+                ld (IX), 00h        ;reset smashed enemy
+                ld (IX+20), 00h
+                ld a, (enemyTimerMax)
+                ld (ix+10), a        ;reset timer
+                ;ld a, $0D         ;clean smash code
+                jp smash        ;smash clears board first    
+                ;enemy exists in pressed location            
+                ;BIT   kbdSCR, (IY+kbdFlags)
+bGetKeyEnd:
+            pop hl    ;xy 
+        pop bc        ;drawable frame #
+    pop hl            ;frame pointer
+    ld a, b
+    cp 9
+    jr z, baddieOnBreak
+    inc (hl)          ;rawFrame# ++
+baddieOnBreak:    
+    inc hl            ;bonusBoard[i++]
+    push hl           ;required by _BONUS_LOOP
+        call delay    
+  
+        jp _BONUS_LOOP
+
+;Sent here because user didn't smash enemy in time   
+;stack: 
+;   hl(xy), bc(dFrame,loc), *hl(boardPointer)
+;* = need to leave at this point before jumping back into _BONUS_LOOP
+late_miss:
+            pop hl      ;xy
+        pop bc          ;drawFrame []draw something in spot missed "TOO SLOW"
+    pop ix              ;boardPT
+    ld a, 0
+    ld (ix), a
+    ld a, (enemyTimerMax)
+    ld (ix+10), a        ;reset timer
+    push ix             ;required
+        push bc         ;empty req for bgetkeyend
+            push hl     ;xy
+            ld a, (ix+20)
+            cp 01h          ;is spikey guy?
+            ld (ix+20), $00
+            jr z, smash_hit
+
+                ld hl, _TEXT_XY_TOPMC
+                ld (penCol), hl
+                ld hl, top_win_BON_2
+                bcall(_VPuts)
+                call IONFastCopy
+
+                jr lose_a_heart
+;f = z if miss
+;f = nz if hit 
+smash:  
+            pop hl 
+            call bonus_swing_anim    ;exits with an xy pop into hl
+            push hl                  ;    push back on stack
+                ;work with live hl vals
+                jr smash_hit
+
+smash_miss: 
+            pop hl 
+            call bonus_swing_anim    ;exits with an xy pop into hl
+            push hl 
+                LD HL, _TEXT_XY_TOPMC 
+                LD (penCol), HL
+                LD HL, top_win_BON_0
+                bcall(_VPuts)   
+                call IONFastCopy
+lose_a_heart:    
+                ld A, (heartCount)
+                cp 1
+                jp z, bonus_game_over
+                dec a
+                ld (heartCount), A
+                call redrawHearts
+
+                call IONFastCopy
+                jp bGetKeyEnd
+smash_hit:
+                ld a, (bopCount)
+                inc a
+
+                ld (bopCount), a
+                ld b, a
+                ;zxc
+                ld a, (nxtBonus)
+                cp b
+                jr nz, noLvlUp
+
+                add a, 42
+                ld (nxtBonus), a
+                ld a, (bonusLvl)
+                cp 4
+                jp z, bonus_game_win
+                inc a 
+                ld (bonusLvl), a 
+                
+                ld a, (enemyTimerMax)
+                sub $08
+                ld (enemyTimerMax), a 
+
+                ;level up anim
+update_bonus_lvl_txt:
+                call draw_layer_fillbg_top
+                ld hl, _TEXT_XY_TOPMC
+                ld h, 1
+                ld (penCol), hl
+                ld hl, top_win_BON_3
+                bcall(_VPuts)
+                call IONFastCopy
+
+                ld hl, _NUM_XY_BONLVL
+                ld (penCol), hl
+                ld h, $00
+                ld a, (bonusLvl)
+                inc a
+                ld l, a
+                bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	            bcall(_op2toop1)            ;OP2 to OP1   
+	            bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+                
+noLvlUp:        ld hl, _NUM_XY_BOPCNT
+                ld (penCol), hl
+                ld h, 00h
+                ld a, (bopCount)
+                ld l, a
+                bcall(_setxxxxop2)          ;puts 16bit(xxxx) HL into OP2
+	            bcall(_op2toop1)            ;OP2 to OP1   
+	            bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+
+                LD HL, _TEXT_XY_TOPMC
+                LD (penCol), HL
+                LD HL, top_win_BON_1
+                bcall(_VPuts)
+            
+                jp bgetkeyend     
+bonus_game_win:
+                call draw_mask_layer
+                LD hl, TOP_ANIM_GOAL_XY
+
+                ;call draw_layer_machine
+                call draw_layer_fillbg_top
+                ld hl, _TEXT_XY_TOPMC
+                ld h, 1
+                ld (penCol), hl
+                ld hl, top_win_BON_WIN
+                bcall(_VPuts)
+                call draw_layer_fillbg_low
+                ld HL, _NUM_XY_MONEY
+                LD (PenCol), HL
+                LD HL, text_bot_expl3
+                bcall(_VputS)
+ 
+                call IONFastCopy        
+                ld A, %11111101
+                out (1), A
+                in a, (1)
+                and $20
+                jp z, bonus_game_over
+                jr bonus_game_win
+
+bonus_game_over:
+                ld a, (bopCount)
+
+                ld l, a
+                ld h, 00h
+                ld a, (_multiplier)
+                ld e, a
+                ld d, 00h
+                call mult
+                ld d, 00h
+                ld e, $22
+                call mult
+                add hl, de
+                ld de, (money)
+                ld (cur_win_total), hl
+                add hl, de 
+                ld (new_money), hl 
+
+                bcall(_GrBufClr)
+                
+;#IFDEF debug
+;                call printQRCode
+;#ENDIF
+
+                ;reset bonusboard/reset timers
+                call resetBonusInitializers
+                call draw_rmenu
+                               ;animate bonus counting
+                ld A, (bt_flags)
+ ;isFirstGame:    .EQU     0
+;isSpinning:     .EQU     1
+;isCounting:     .EQU     2
+;isWaiting:      .EQU     3
+;isWin:          .EQU     4
+;isBonus:        .EQU     5
+;is1stBonusRoll: .EQU     6
+;cleartop:           .EQU     7
+                ;flags on
+                or %11010100
+                ;flags off
+                and %11010101
+                LD (bt_flags), A
+                ;ld a, (bt_flags2)
+                ;or %1 ;isFromBonus = true
+                ;ld (bt_flags2), a
+
+
+            pop hl
+        pop bc
+    pop de
+                ld hl, slot_win_states
+                ld (data_p+6), hl
+                ;hack the board redraw to think we are performing a normal stopspin
+                jp skip_chk_win
+bonus_swing_anim:
+            ld a, l
+            ld l, a
+            dec l
+            ld a, h  
+            add a, 3
+            push hl
+                ld b, 10
+                ld c, 1
+                ld h, 01h  ;sprite off
+                ld ix, _10x16_off     
+                call put_any_Sprite
+                call IONFastCopy
+            pop hl 
+            push hl
+                LD A, H
+                LD B, 9
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer1
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 9
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer1
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 9
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer2
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 9
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer2
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            ret
+            dec h
+            dec h
+
+            push hl   
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer3
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer3
+                call put_any_Sprite ;putany
+            pop hl          ;xy
+            push hl
+           ; call bonus_swing_anim
+                LD A, H
+                LD B, 12
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer4
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer4
+                call put_any_Sprite ;putany
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer5
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer5
+                call put_any_Sprite ;putany
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer6
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer6
+                call put_any_Sprite ;putany
+            pop hl          ;xy
+            push hl
+           ; call bonus_swing_anim
+                LD A, H
+                LD B, 12
+                LD C, 2       ;12
+                LD H, 3       ;xor
+                LD IX, bonus_hammer7
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer7
+                call put_any_Sprite ;putany
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer8
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+            push hl
+                LD A, H
+                LD B, 12
+                LD C, 2       ;8x8
+                LD H, 3       ;xor
+                LD IX, bonus_hammer8
+                call put_any_Sprite ;putany
+                call IONFastCopy
+            pop hl
+                ret
+            ;pop af              ;hit miss
+
+;args:
+;   A = a board position[0-8]
+;returns:
+;   HL = (h=x,l=y) coords of A
+bonusPosAtoXYinHL:
+    LD HL, BON_Y
+    LD (P_), HL
+    call jumpAfromP_
+    ld l, (ix)          ;y for sprite
+    ld d, 0
+    ld e, 0Ah
+    add ix, de
+    ld a, (ix)          ;x  
+    ld h, a           ;hl = x,y
+    ret   
+
+
+;147AD
+;258BE
+;369CF
+
+;log win data into slot_win_states (a,c,b,  a,c,b  ...)
+;   (COORD) temporarily holds the row of winning offsets to light up
+;   a = line number of win   ;c = no. of winning symbols in line ;b = symbolID
+win_log: 
+               ld HL, COORD         
+               ld a, (HL)               ;A = current winning payline#
+
+win_log_bonus: ld HL, (data_p+6)        ;data_p6 holds offset for storing data INTO slot_win_states 
+               ld (HL), a               ;Record winning payline# in slot_win_states db
+               ;winline print
+               ld a, (bt_flags)
+               ;W C              ;turn win & counting on 
+               or %10100
+               ld (bt_flags), a
+
+               inc hl
+               ld (HL), c               ;store inArow into slot_win_states (0,1)
+               inc hl
+               ld (HL), b               ;symbolID-needed for printing win data
+               inc hl                   ;skip to win_total
+               ld (data_p+6), HL
+               ld a, b                  ;get symbol id into A for _pay offset jump
+               ;----------------calculate winnings->(p6[4])------------
+
+                ld HL, sym_o
+                ld (P_), HL
+                ;ld b, c
+                call jumpAfromP_
+                ld a, (IX)
+                add a, _PAY
+
+                ld HL, symbols
+                LD (P_), HL
+                call jumpAfromP_
+                ld a, (IX)                  ;pay 
+
+                ld E, A
+                LD D, 00h
+                ld L, C
+                ld H, 00h
+                call mult                   ;total of current win
+
+                ;x multiplier
+                ld a, (_multiplier)
+                ld e, a
+                ld d, 00h
+                call mult                   ;updated total
+
+                LD A, L
+                LD DE, (data_p+6)
+                LD (DE), A
+                INC DE
+                LD A, H
+                LD (DE), A
+                INC DE
+                LD (data_p+6), DE
+
+            ;**we don't animate here, because we are waiting to poll all winning results
+            ;**first, in the _win_anim_array - then draw them at the same time w/ draw_arr_at_arr
+               ret
+
+ 
+;fill up the win_anim_array, and prep for XORing of winning symbols               
+classify_wins:
+;if there is a win, check to see if top symbols are in alignment for QR bonus.
+                ld a, (nftflags)
+                BIT isNFTeligible, a 
+
+
+                call nz, qrBonusWin
+
+                ;while slot_win_states !=0,
+                ld HL, slot_win_states
+                ld (data_p+6), HL
+cw_re_entry:
+                ld b, (HL)     ;line number of first win
+                inc B          ;line# is saved as 0 index for ease of earlier algos--reset base.
+                inc hl
+                ld c, (HL)     ;3,4, or 5 in a row
+                inc hl         ;skip symbolID
+                inc hl         ;skip total
+                inc hl         ;skip 2nd byte of total
+                ld (data_p+6), HL
+                ld a, b
+                ;get to the line number
+                cp 1            ;check if on the first line *A=slot_win_states[0], first win line#
+
+                ld a, 0
+                dec B           ;get 0 indexed   
+                jr z, skiplo   
+jYpp:           
+                add a, 6             
+                djnz jYpp
+
+;<-----------------A=offset to reach Y axis of pay_rules array.
+
+;for (winStates[j])
+;   for (xInArow)
+;       slot_cur_reel_state[pay_rule[i]] -> win_anim_array[pay_rule[i]]
+                           ;
+skiplo:     
+;19EFA 
+               LD HL, pay_rules                  ;HL = (HL + DE(Offset))
+               LD (P_), HL
+               CALL jumpAfromP_
+               LD (data_p), IX  
+               LD A, (IX)                       ;pay_rule[i]
+
+;    for(C = i)               symbolID          
+;        slot_cur_reel_state[(data_p[i])] -> win_anim_array[(data_p[i])                  
+               DEC A                            ;adjust offset 
+               LD HL, slot_chk_win_state       ;HL = (HL + DE(Offset))
+               LD (P_), HL
+               CALL jumpAfromP_
+               LD (data_p+2), IX                ;symbolID pointer
+
+;      for(C = i)
+;          (data_p+2) -> win_anim_array[(data_p)]
+;------------------
+val_to_aro:     
+               ;zzz offsets are showing as 2, 5, 8, 11, 14 (wrong winning line than copied from)
+               LD HL, (data_p)                  ;we pulled symbol from _state+(data_p), add to _win_anim+(data_p)
+               ;DEC L                            ;adjust indexing
+fill_sym2wins: LD A, (HL)                       ;A = position where symbol was from/needs to go to
+               DEC A                            ;adjust indexing
+               LD HL, win_anim_array            ;HL = (HL + DE(Offset))
+               LD (P_), HL
+               CALL jumpAfromP_
+               LD (data_p+4), IX  
+    
+;--------------------------------------
+;(data_p+2)                /////////
+; symbolID  -> (data_p+4)  //
+;---------------------------
+
+                LD HL, (data_p+2)               ;(data_p+2)                             
+                LD A, (HL)                      ;A = symbol to copy into win_anim_array,
+                ;**Symbol correct on 1st iteration, repeats wrong after 2nd iteration.
+                LD (IX), A                      ;copy symbol in position                                               
+                dec C                                        
+                LD HL, (data_p)                
+                inc HL                          ;point to next pay_rule item
+                LD (data_p), HL
+                LD A, 0
+                CP C
+                jr nz, fill_sym2wins                ;need to jump to next pay_rule item ->
+
+                ld HL, (data_p+6)                   ;pointing to L in H,L
+                inc hl                              ;skip total
+
+                ld a, (hl)
+                LD (data_p+6), HL
+                cp $0F
+                jp nz, cw_re_entry                  ;jump to next pay_rule row   \/
+
+                call get_total_win_of_spin          ;does all the math for counting & winimation
+                ;reset data_p6 pointer
+                LD HL, slot_win_states
+                LD (data_p+6), HL
+
+                ret
+;prints B integers from HL onto the display                
+print_arrayOfBytes:
+pa_lp:          ld a, (HL)
+                inc  HL
+                push HL
+                push bc
+                bcall(_setxxop1)            ;place A into OP1
+	            bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)
+                pop HL
+                pop bc
+                dec b
+                ld a, b
+                cp 01h
+                jr nz, pa_lp 
+                call IONfastCopy
+                ret
+
+;animates money counting up towards new total
+_count_up:      ;HL is new total, to count to
+                ;DE is current balance
+                LD HL, (new_money)
+                LD DE, (money)
+                INC DE
+                LD (money), DE
+                SBC HL, DE
+                jr z, moneyCounted
+
+                ret
+moneyCounted:
+                ld a, (bt_flags)
+                res isCounting, a
+                ld (bt_flags), a 
+                ret     
+
+;call this once you've classified all wins
+get_total_win_of_spin:
+                LD HL, slot_win_states
+                LD (data_p+6), HL
+
+g_t_l:          inc hl
+                inc hl
+                inc hl
+                push hl
+                LD A, (HL)         ;get HL 16bit total into DE
+                INC HL
+                LD E, A
+                LD A, (HL)
+                LD D, A
+
+                LD HL, (cur_win_total)
+             
+                ADD HL, DE
+
+                LD (cur_win_total), HL      ;total $ of payline win
+        
+                pop hl
+
+                inc hl                      ;2nd byte
+                inc hl                      ;next win item
+
+                ld a, (HL)
+                cp $0F
+                jr nz, g_t_l
+                
+                LD    BC, _NUM_XY_MONEY
+                LD    (PenCol), BC              ; PenCol comes before PenRow-  
+                LD    DE, (money)
+                LD    HL, (cur_win_total)
+                ADD   HL, DE
+                LD (new_money), HL
+
+                ret      
+
+;16bit multiplication routine from ZiLog
+;de * hl -> hl
+mult:
+                ld   b, 16
+                ld   c, d
+                ld   a, e
+                ex   de, hl
+                ld   hl, 0
+mloop:          srl  c
+                rra
+                jr   nc, noadd
+                add  hl, de
+
+noadd:          ex   de, hl
+                add  hl, hl
+                ex   de, hl
+                djnz mloop
+                ret
+         
+;Put large sprite
+;B = height
+;C = width / 8
+; l=yc
+; a=xc
+; ix holds pointer
+XORSPR_L:
+              push HL
+              LD HL, bonus_symbol
+              LD (P_), IX
+              LD DE, (P_)
+              SBC HL, DE
+              pop HL
+              jp z, XORSPR_BONUS
+              LD   B, 8
+              LD   C, 1              
+              CALL IonLargeSprite
+              ret
+
+
+XORSPR_BONUS: LD B, 10
+              LD C, 2
+              dec a
+              dec a
+              dec a
+              dec a
+              dec l
+              CALL IonLargeSprite
+              ret                   
+
+;fully customizable sprite routine
+;   any size, and/or/xor
+;-----> Draw a picture
+;Input:	ix->sprite
+;	a=x
+;	l=y
+;	b=height	(in pixels)
+;	c=width		(in bytes, e.g. 2 would be 16)
+;   h=off/on/xor
+;     (1=off/2=on/else=xor)
+
+;Output: nothing
+; All registers are destroyed except bc', de', hl'
+; 
+; Used for clear masks.  0's will override
+put_any_Sprite:
+    push af   ;x coord
+     ld a, h
+      cp 01h
+      jp nz, _OnorXor
+      ld a, $A2        ;and d
+      ld (_on_off_d),a
+      inc a
+      ld (_on_off_e),a ;and e
+      jr psprite_begin
+_OnorXor:
+     ld a, h
+     cp 02h
+     jp nz, _xor_sprite
+     ld a, $B2        ;or d
+     ld (_on_off_d),a
+     inc a
+     ld (_on_off_e),a ;or e
+     jr psprite_begin
+_xor_sprite: 
+     ld a, $AA        ;xor d
+     ld (_on_off_d),a
+     inc a
+     ld (_on_off_e),a ;or e  
+psprite_begin:
+    pop af            ;og vals from caller
+	di
+	ex	af,af'
+	ld	a,c
+	push	af
+	ex	af,af'
+	ld	e,l
+	ld	h,$00
+	ld	d,h
+	add	hl,de
+	add	hl,de
+	add	hl,hl
+	add	hl,hl
+	ld	e,a
+	and	$07
+	ld	c,a
+	srl	e
+	srl	e
+	srl	e
+	add	hl,de
+	ld	de,gbuf
+	add	hl,de
+anySpriteLoop1:
+	push	hl
+anySpriteLoop2:
+	ld	d,(ix)
+	ld	e,$00
+	ld	a,c
+	or	a
+	jr	z,anySpriteSkip1
+anySpriteLoop3:
+	srl	d
+	rr	e
+	dec	a
+	jr	nz,anySpriteLoop3
+anySpriteSkip1:
+	ld	a,(hl)
+_on_off_d:	xor	d
+	ld	(hl),a
+	inc	hl
+	ld	a,(hl)
+_on_off_e:	xor	e
+	ld	(hl),a
+	inc	ix
+	ex	af,af'
+	dec	a
+	push	af
+	ex	af,af'
+	pop	af
+	jr	nz,anySpriteLoop2
+	pop	hl
+	pop	af
+	push	af
+	ex	af,af'
+	ld	de,$0C
+	add	hl,de
+	djnz	anySpriteLoop1
+	pop	af
+	ret
+
+
+;-----> Draw a sprite
+; b=size of sprite
+; l=yc
+; a=xc
+; ix holds pointer
+;Output:   Sprite is XORed to the graph buffer.
+;ix->next sprite
+;Destroys: af bc de hl ix
+
+XORSPR:
+                LD   B,8                         ;size of the sprite
+                CALL ionPutSprite
+                ;CALL ionPutSprite
+                RET
+;------
+buffer_to_backup:  
+                LD   HL,PLOTSSCREEN		;save whole screen as background
+                LD   DE,SAVESSCREEN
+                LD   BC,768
+                LDIR
+                ret
+backup_to_buffer:   
+                LD   HL,SAVESSCREEN
+                LD   DE,PLOTSSCREEN
+                LD   BC,768
+                LDIR
+                RET
+
+DELAY:         LD   B,20
+LOOP1:         PUSH BC
+               LD   B,255
+LOOP2:         DJNZ LOOP2
+               POP  BC
+               DJNZ LOOP1
+               RET
+    
+genStore_15_rng:  
+               LD HL, slot_cur_reel_state
+               LD (data_p), hl
+               LD DE, slot_saved_reel_state
+               LD BC, 25    
+               LDIR                     ;move previous board to saved area.
+               
+new_num:
+               CALL rng8toA             ;8bit rand -> A register, HL becomes new seed                
+               ld e, 1                  ;offset counter, start at 1 instead of 0, to not overflow 
+               ld HL, ratio_table    
+               ;ld a, 20
+               LD d, (HL)               ;first %value in the ratio table (0-40)/255->B
+roll_prob:                  
+               cp d
+               jp c, rollz
+               inc hl
+               ld d, (HL)
+               inc e
+               jp nz, roll_prob
+rollz:        
+               ;ld a, e                             ;Loading 0 into A overflows _setxxop1() 
+               LD  HL, (data_p)                     ;_curstate address
+               INC E
+               LD (HL), e                           ;new data -> indirectly into _curstate 
+               INC HL                               ;HL     now points to _curstate+1 address
+               LD (data_p), HL                      ;data_p now points to _curstate+1 address
+               ld a, (HL)
+               cp $0F
+               jr nz, new_num
+               
+
+               ld hl, slot_cur_reel_state
+               ld (data_p), hl
+               ret 
+
+
+
+rng8toA:
+;This code snippet is 9 bytes and 43cc
+;Inputs:
+;   HL is the input seed and must be non-zero
+;Outputs:
+;   A is the 8-bit pseudo-random number
+;   HL is the new seed value (will be non-zero)
+                  ;opcode cc
+                LD a, (rng_seed)
+                LD h, a
+                LD a, (rng_seed+1)
+                LD l, a
+
+                add hl,hl     ; 29    11
+                sbc a,a       ; 9F     4
+                and %00101101 ; E62D   7
+                xor l         ; AD     4
+                LD l,a        ; 6F     4
+                LD a,r        ; ED5F   9
+                add a,h       ; 84     4
+
+                LD b, a
+                LD a, h
+                LD (rng_seed), a
+                LD a, l
+                LD (rng_seed+1), a
+                LD a, b
+
+                ret 
+resetBonusInitializers:
+               LD   A, $40
+               LD   (enemyTimerMax), A
+               LD   HL, bonEmyKey    
+               LD   DE, bonEmyKey+1
+               LD   (HL),$00
+               LD   BC, 8
+               LDIR
+
+               LD   HL, bonusBoard	    
+               LD   DE, bonusBoard+1
+               LD   (HL),$00
+               LD   BC, 8
+               LDIR
+
+               LD   HL, bonusPeekTimer	    
+               LD   DE, bonusPeekTimer+1
+               LD    A, (enemyTimerMax)
+               LD   (HL),A
+               LD   BC, 8
+               LDIR
+
+               ld a, 0
+               ld (bonusLvl), a 
+               inc a
+               ld (bopCount), a 
+               ld a, 42
+               ld (nxtBonus), a
+            
+               ret
+draw_layer_fillall:
+               LD   HL,PLOTSSCREEN		            ;top LCD black
+               LD   DE,PLOTSSCREEN+1
+               LD   (HL),$FF
+               LD   BC,767
+               LDIR
+               ret
+draw_layer_checkerbg_top:
+               LD a, (bg_anim_val)
+               RRC a 
+               RRC a 
+               RRC a 
+               RRC a 
+               ld (bg_anim_val), a 
+               LD   HL,PLOTSSCREEN		            ;top LCD black
+               LD   DE,PLOTSSCREEN+1
+               LD   (HL),a
+               LD   BC,133
+               LDIR
+               ret
+draw_layer_fillbg_top:
+                    
+               LD   HL,PLOTSSCREEN		            ;top LCD black
+               LD   DE,PLOTSSCREEN+1
+               LD   (HL),$00
+               LD   BC,263
+               LDIR
+               ; ld a, (bt_flags)
+                ;bit isSpinning, a
+               ; call nz, dta
+               call dta
+               ret
+dta:            
+               bit isBonus, a 
+               call z, draw_top_animation
+               ret
+
+
+             
+
+draw_layer_fillbg_low:
+
+               LD   HL,PLOTSSCREEN+(56*12)	            ;bottom LCD black
+               LD   DE,PLOTSSCREEN+(56*12)+1
+               LD   (HL),$FF
+               LD   BC,112
+               LDIR   
+draw_layer_fillbg_low_clip_sym:
+               LD   HL,PLOTSSCREEN+(54*12)	            ;bottom LCD black
+               LD   DE,PLOTSSCREEN+(54*12)+1
+               LD   (HL),$00
+               LD   BC,48  ;3 rows of 16 - should be right above text - enough to clip off dropping symbols into text zone
+               LDIR            
+               ret
+draw_top_animation:
+                ;call draw_layer_checkerbg_top
+               ;call ionFastCopy
+draw_top_sym:
+               ld ix, (run_anim_p)
+
+               LD   hl, TOP_ANIM_XY+1
+               ld   a, (hl)
+               ;inc  (hl)         ;increase x poistion of animation
+               dec  hl
+               ld   l, (hl)
+               ld   b, 12
+               ld   c, 1
+               ld   h, 3
+
+               call put_any_Sprite 
+
+               ld a, (run_anim_pace)
+               dec a
+               ld (run_anim_pace), a 
+               cp 1
+               call z, adv_run_anim
+
+
+
+               ld   ix, (nft_anim_p)
+               LD   hl, TOP_ANIM_GOAL_XY+1
+               ld   a, (hl)
+               dec  (hl)         ;increase x poistion of animation
+               dec  hl
+               ld   l, (hl)
+               ld   b, 10
+               ld   c, 1
+               ld   h, 3
+
+               call put_any_Sprite 
+
+               ret
+setNFTeligibleSpin:
+                ld a, (nftflags)
+                SET isNFTeligible, a 
+                ld (nftflags), a
+                ld hl, nft_anim_sprite
+                ld (nft_anim_p), hl
+                ret
+
+adv_run_anim:
+            ld a, 3
+            ld (run_anim_pace), a 
+            ld a, (bg_anim_frame)
+               inc a 
+               ld (bg_anim_frame), a 
+               cp 7
+               call z, resetRunAnimFrame
+               ld hl, (run_anim_p)
+               ld (P_), hl
+               ld a, $0C
+               call jumpAfromP_
+               ld (run_anim_p), IX
+               ret
+
+resetRunAnimFrame:
+             ld a, 1
+             ld (bg_anim_frame), a 
+             ld hl, bg_anim_run1
+             ld (run_anim_p), hl
+             ret 
+draw_layer_bonus_bg:
+                bcall(_GrBufClr)
+                call draw_top_layers
+                ;call draw_mask_layer
+                ;Y + 11 between rows
+                ld HL, _NUM_XY_MONEY
+                LD (PenCol), HL
+                LD HL, text_bot_expl2
+                bcall(_VputS)
+                RES   textInverse, (IY+textFlags)   ;invert text    
+
+                LD HL, _NUM_XY_BO7
+                LD (penCol), HL
+                LD A, '7'
+                bcall(_VPutMap)
+                LD HL, _NUM_XY_BO8
+                LD (penCol), HL
+                LD A, '8'
+                bcall(_VputMap)
+                LD HL, _NUM_XY_BO9
+                LD (penCol), HL
+                LD A, '9'
+                bcall(_VputMap)
+
+                LD HL, _NUM_XY_BO4
+                LD (penCol), HL
+                LD A, '4'
+                bcall(_VPutMap)
+                LD HL, _NUM_XY_BO5
+                LD (penCol), HL
+                LD A, '5'
+                bcall(_VputMap)
+
+            
+                LD HL, _NUM_XY_BO6
+                LD A, L
+                DEC A
+                DEC A
+                DEC A
+                LD L, H
+                INC L
+                INC L
+                LD B, 8
+                LD IX, bonus_enemy1
+                call ionPutSprite
+                ;LD (penCol), HL
+                ;LD A, '6'
+                ;bcall(_VputMap)
+
+                LD HL, _NUM_XY_BO1
+                LD (penCol), HL
+                LD A, '1'
+                bcall(_VPutMap)
+                LD HL, _NUM_XY_BO2
+                LD (penCol), HL
+                LD A, '2'
+                bcall(_VputMap)
+                LD HL, _NUM_XY_BO3
+                LD (penCol), HL
+                LD A, '3'
+                bcall(_VputMap)
+                SET  textInverse, (IY+textFlags)   ;invert text 
+
+               ;n>=1
+bon_redraw:    
+               LD DE, _BON_XY_HP1
+               LD A, E
+               LD L, D
+               LD B, 8
+               LD IX, bonus_heart_on
+               call ionPutSprite
+
+               LD DE, _BON_XY_HP2
+               LD A, E
+               LD L, D
+               LD B, 8
+               LD IX, bonus_heart_on
+               call ionPutSprite
+
+               LD DE, _BON_XY_HP3
+               LD A, E
+               LD L, D
+               LD B, 8
+               LD IX, bonus_heart_on
+               call ionPutSprite
+
+               ld HL, _TEXT_XY_TOPBL
+               LD (PenCol), HL
+               LD HL, text_top_expl
+               bcall(_VputS)            
+
+               ;LD BC, 24*256+42                ;1st point, X=25, Y=30
+               ;LD DE, 88*256+42                ;2nd point, X=62, Y=50
+               LD H, 02h                       ;line on
+               ;bcall(_iline)
+               LD BC, 18*256+31                ;1st point, X=25, Y=30
+               LD DE, 90*256+31                ;2nd point, X=62, Y=50
+               bcall(_iline)
+               LD BC, 18*256+20                ;1st point, X=25, Y=30
+               LD DE, 90*256+20                ;2nd point, X=62, Y=50
+               bcall(_iline)
+               ;LD BC, 24*256+9                ;1st point, X=25, Y=30
+               ;LD DE, 88*256+9                ;2nd point, X=62, Y=50
+               ;bcall(_iline)
+
+; Draws a vertical line from (D, L)-(D, E)
+;BON_Y: .db  $2C,$2C,$2C, $21,$21,$21, $16,$16,$16, 0fh
+;BON_X: .db  $1A,$2A,$3A, $1A,$2A,$3A, $1A,$2A,$3A, 0fh
+               ;LD BC, 12*256+41                 ;1st point, X=25, Y=30
+               ;LD DE, 12*256+10                 ;2nd point, X=62, Y=50
+               ;bcall(_iline)
+               LD BC, 40*256+41                 ;1st point, X=25, Y=30
+               LD DE, 40*256+10                 ;2nd point, X=62, Y=50                     ;line on
+               bcall(_iline)
+               LD BC, 68*256+41                ;1st point, X=25, Y=30
+               LD DE, 68*256+10                ;2nd point, X=62, Y=50
+               bcall(_iline)
+               ;LD BC, 95*256+41                ;1st point, X=25, Y=30
+               ;LD DE, 95*256+10                ;2nd point, X=62, Y=50
+               ;bcall(_iline)
+               call IONFastCopy
+ 
+redrawHearts:  ld A, (heartCount)
+               cp 3
+               ret nc
+               cp 2 
+               push af
+               call z, draw1heartgone
+               pop af
+               cp 1
+               call z, draw2heartsgone
+               ret
+draw1heartgone:
+               LD DE, _BON_XY_HP1
+               LD A, E
+               LD L, D
+               LD B, 8
+               LD IX, bonus_heart_off
+               call ionPutSprite
+
+               ld A, (heartCount)
+               cp 1
+               ret nz
+
+draw2heartsgone:
+               LD DE, _BON_XY_HP2
+               LD A, E
+               LD L, D
+               LD B, 8
+               LD IX, bonus_heart_off
+               call ionPutSprite
+               ret
+
+
+;clear out a defined chunk of gbuffer
+mask_from_reel_A:
+               LD   DE, $000B            ;inc each iteration
+               LD IX, PLOTSSCREEN+6
+msk_loop:       
+
+               LD (data_p), IX
+               LD HL, (data_p)
+               INC IX
+               LD (data_p), IX 
+               LD DE, (data_p)
+               LD (HL), $FF
+               LD BC, 4
+               LDIR
+   
+               LD DE, $000B
+               LD HL,  760
+               ADD IX, DE
+       
+               ret    
+draw_mask_layer:
+    LD ix, maskXYWH
+    LD a, (ix)        ;x
+    inc ix
+    LD e, (ix)        ;y
+    inc ix 
+    call clearGBUFrect
+    call ionFastCopy
+    ;clear out pointers
+    ld hl, p_callseq
+    ld de, p_callseq+1
+    ld bc, 5 
+    ld (hl), $00
+    ldir 
+    ret 
+;clearGBUFrect()
+;clears out a rectangle in the graph buffer
+;
+;inputs: a=x, e=y, d=width, height
+clearGBUFrect:
+    call ionGetPixel
+    push hl 
+     ld b, a   ;bit offset into first byte per row
+     call _bitRemainderFromOffset  ; c=byte 1 remainder
+     ld b, a 
+
+    ;width/8
+
+     ld d, (ix)
+     inc ix 
+     ld a, d 
+     cp 9
+     jp nc, _moreBits
+     ld hl, _renderB1Remainder
+     ld (p_callseq), hl 
+     jp _procFIN
+_moreBits:
+     sub c 
+     ;a = bits left after we render the remainder
+     cp 9
+     jp nc, __nxt
+     call _bcLone
+     ld d, a ;finremainder's mask
+     ld hl, _renderB1Remainder
+     ld (p_callseq), hl 
+     ld hl, _renderRNRemainder
+     ld (p_callseq+2), hl 
+     jp _procFIN
+__nxt:
+
+;----------all flows before this are self-ended - full row instructions are in p_callseq ptr----
+     ;c=remainder count
+     ld d, a
+     call _getb1remMSK   
+     ld hl, _renderB1Remainder
+     ld (p_callseq), hl 
+
+     call _byteCount ;e=bytecount a=remainder of (Width-StartOffset)%8 
+     ld d, a 
+     or %0  
+     jp z, _noFINbits
+     call _createLastBitsInRowMask ;a = final bits mask
+     ld d, a      ;d = final bits mask, if d=0, no final mask
+    ;ld c, 3      ;instruction counter, per row
+     ld hl, _renderRNRemainder
+     ld (p_callseq+4), hl 
+_noFINbits:
+     ld hl, _rendFullBytesinRow
+     ld (p_callseq+2), hl
+
+_procFIN: 
+
+   pop hl
+   ld c, (ix)
+
+
+_zeroBufCOLj:  
+   ld ix, (p_callseq)
+   push de
+     push hl   
+      jp (ix)
+__rechk:
+      ld a, (p_callseq+2)
+      or %0
+      jp z, _partBre
+      ld ix, (p_callseq+2)
+      jp (ix)
+__rechk2:
+      ld a, (p_callseq+4)
+      or %0
+      jp z, _partBre
+      ld ix, (p_callseq+4)
+      jp (ix)
+_partBre:
+     pop hl 
+     ld e, 12
+     ld d, 0 
+     add hl, de 
+     dec c
+    pop de 
+    jp nz, _zeroBufCOLj
+    ret 
+
+;inputs: e = bytecount
+_rendFullBytesinRow:
+    ld (hl), $00
+    inc hl 
+    dec e
+    jp nz, _rendFullBytesinRow
+    jp __rechk2
+
+;inputs:  d = bits remaining
+;output:  a = && mask to close out the row
+_createLastBitsInRowMask:
+    ld c, %00000001
+_clbi:         
+    ld a, 8
+    sub d 
+    xor a 
+__clp:
+    or c 
+    sla c 
+    dec d 
+    jp nz, __clp
+    ret 
+
+;output:  e=byte count, a=remainder     
+_byteCount:
+    xor a 
+    ld c, 1 ;bitcounter 
+    srl d
+    call c, __bcc
+    srl d 
+    call c, __bcc 
+    srl d 
+    call c, __bcc
+    ld e, d
+    ret  
+__bcc:
+    sla c 
+    or c 
+
+    ret
+;b=starting position
+;c=bits remaining to 0 out 
+_getb1remMSK:
+    ld a, b
+    cp $80
+    jp nz, __gmk
+    ld a, 0
+    jp __gmkFIN
+__gmk:
+    push de 
+    ld d, %10000000
+    ld a, b 
+__gmki:
+    or d
+    srl d
+    dec c
+    jp nz, __gmki
+    pop de 
+__gmkFIN
+    ld (rectMaskB1Mask), a 
+    ret 
+
+;b=starting position
+_renderB1Remainder:
+    ld a, (rectMaskB1Mask)
+    and (hl) 
+    ld (hl), a 
+    inc hl 
+    jp __rechk
+
+
+;inputs: d = final bytemask
+_renderRNRemainder:
+    ld a, d 
+    and (hl)
+    ld (hl), a 
+    inc hl 
+    jp _partBre 
+
+;the full width is less than 16
+;c = bits remaining after byte0's remainder is rendered
+_bcLone:
+    ld d, c 
+    call _createLastBitsInRowMask
+    ret
+
+;input:  b = getpixel bitmask
+;output: c = the remainder
+_bitRemainderFromOffset:
+    ld c, 8 
+
+_bremI:        
+    srl b 
+    ret z 
+    dec c 
+    jp _bremI
+;fill full bytes with 0's
+
+; Draws a vertical line from (D, L)-(D, E)
+Draw_Line:
+    LD a, 5
+    ld l, a
+    LD D, A
+    LD a, 30
+    LD e, a 
+
+    LD     A, E
+    SUB    L
+    RET    Z
+    PUSH   AF        ; Find and store vertical length of line
+
+    LD     A, D
+    CALL   ionGetPixel
+
+    POP    BC        ; Now B = number of pixels to draw
+    LD     DE, 12     ; There are 12 bytes between rows
+    LD     C, A       ; Save the bitmask because it will get obliterated
+
+PlotLoop:
+    LD     A, C
+    OR     (HL)
+    LD     (HL), A
+    ADD    HL, DE
+    DJNZ   PlotLoop
+    RET
+
+;Load (data_p) with the address of the array sequence to draw
+draw_sarr_at_xarr_yarr:
+               LD HL, (data_p+8)
+               LD (data_p), HL
+dsarr_loop:   
+               LD HL, (data_p)            
+               LD A, (HL)
+               CP $0F
+               ret z
+               INC HL
+               LD (data_p), HL
+               or %0                      ;reels with no data don't get re-drawn
+               jr z, dsarr_loop             
+               ld HL, draw_w_h
+               cp $09                     ;if bonus symbol custom height
+               ld b, (HL)                  ;sprite width, from calling def
+               INC HL
+               ld c, (HL)                  ;sprite height, set from caller
+               
+               ADD A, A                    ;E contains 1-8 result of the rng symbol
+               ADD A, A                    ;(1-8)*8 = sprite offset
+               ADD A, A 
+               ld HL, slot_sprites
+               ld (P_), HL
+               call jumpAfromP_
+               push IX
+               ;dec IX
+      ;
+               ld a, (aO)
+               add a, sX
+
+               LD HL, (data_p)
+               dec HL
+               LD (P_), HL
+               call jumpAfromP_
+               ld A, (IX)
+               LD BC, $001A
+               ADD IX, BC
+               LD L, (IX)
+               
+               ;add a, $1A
+               ;ld (u_y+2), a
+
+;u_x:           ld A, (IX + sX)         ;x coordinate
+;u_y:           LD HL, (IX + sY)         ;y coordinate [***LOADING 0 on stopspin]
+               pop IX
+
+               ld  c, a
+               LD  A, (spinAnimCount)
+               add a, l
+               ld  L, A
+               ld  a, c
+               CALL XORSPR_L
+
+        
+               jp dsarr_loop
+;call whenever multiplier or lines is updated.
+_incMult:    
+             ld a, (_multiplier)
+             cp 05h
+             jp nz, _incM
+             ld a, 1
+             ld (_multiplier), a
+             jr d_incM
+_incM:       inc a
+             ld (_multiplier), a
+
+d_incM:        LD HL, _TEXT_XY_RMENU
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 78h            ;small 'x'
+               bcall(_VPutMap)    
+
+               jr preUpdateBet
+
+_incLines:
+             ld a, (_lines)
+             cp 09h
+             jp nz, _incL
+             ld a, 1
+             ld (_lines), a
+             jr d_incL
+_incL:       inc a
+             ld (_lines), a
+
+d_incL:        LD HL, _TEXT_XY_RMENU3
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 2Bh            ;small '+'
+               bcall(_VPutMap)    
+                                 
+               jr preUpdateBet_l
+
+_decLines:
+             ld a, (_lines)
+             cp 01h
+             jp nz, _decL
+             ld a, 9
+             ld (_lines), a
+             jr d_decL
+_decL:       dec a
+             ld (_lines), a
+
+d_decL:        LD HL, _TEXT_XY_RMENU2
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 2Dh            ;small '-'
+               bcall(_VPutMap)         
+            
+               jr preUpdateBet_l
+
+
+preUpdateBet_l:
+               call draw_activePayLines_mini
+               ;
+;highlight buttons being pressed, check $, anything else that needs to be done before update bet
+preUpdateBet:
+               call ionFastCopy
+               call draw_rmenu
+
+
+updateBet:          
+            ld a, 00h
+            ld h, a
+            ld d, a
+
+            ld a, (_lines)
+            ld e, a
+            ld a, (_multiplier)
+            ld l, a
+            call mult
+
+            ld B, L
+            LD DE, (money)
+            LD A, E
+            cp 00h
+            jp nz, enmoney
+            CP B
+            ret c 
+enmoney:    
+            LD (_totalBet), HL
+            ret 
+
+draw_rmenu:
+               LD HL, _TEXT_XY_RMENU
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 78h            ;small 'x'
+               bcall(_VPutMap)       
+
+               LD HL, _TEXT_XY_RMENU2
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 2Dh            ;small '-'
+               bcall(_VPutMap)
+
+               LD HL, _TEXT_XY_RMENU3
+               LD (PenCol), HL
+               LD A, ' '
+               bcall(_VPutMap)
+               LD A, 2Bh            ;small '+'
+               bcall(_VPutMap)
+              
+               ;turn off text highlighting
+               RES   textInverse, (IY+textFlags)   ;invert text
+               LD HL, _NUM_XY_LNS
+               LD (PenCol), HL
+               LD a, (_lines)
+               bcall(_setxxop1)            ;place A into OP1
+	           bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)  
+
+               LD HL, _NUM_XY_MTP
+               LD (PenCol), HL
+               LD a, (_multiplier)
+               bcall(_setxxop1)            ;place A into OP1
+	           bcall(_dispop1a)            ;write OP1 to screen, at (PenCol, PenRow)           
+               SET   textInverse, (IY+textFlags)   ;invert text
+               call IONfastCopy
+               ret
+;jumpAfromP_()
+;takes an offset(A) and a pointer (P*), jumps 16bits and returns new
+;location in IX.  Used for dynamic jumping
+;   inputs:
+;       A = offset, P* = entry point
+;   output:
+;       IX now points to new memory location
+;   destroys:
+;       HL, DE, IX 
+jumpAfromP_:    
+               LD E,  A
+               LD D,  00h             
+               LD IX, (P_)       ;HL = (HL + DE(Offset))
+               ADD IX, DE
+               ret
+jumpEDfromP_:                 
+               LD IX, (P_)       ;HL = (HL + DE(Offset))
+               ADD IX, DE
+               ret
+draw_top_layers:
+                call draw_mask_layer 
+                call draw_layer_fillbg_top     
+                call draw_layer_fillbg_low
+                ret
+
+draw_activePayLines_mini:  
+                ld b, 8
+                ld c, 2
+                ld a, 4Fh
+                ld l, 38h   ;bottom right panel       
+                ;ld a, 2Eh
+                ld IX, _8x16_on
+                ld h, 02; 
+                call put_any_Sprite
+                call IONfastCopy
+
+                ld a, (_lines)
+                ld c, a         ;end condition
+                ld b, 1         ;start point
+                LD IX, minimap
+
+_dapl:          push ix
+                push bc
+
+                ld b, 8
+                ld c, 2
+                ld a, 4Fh
+                ld l, 38h
+                ;ld l, 2Eh
+    
+                call IonLargeSprite
+                call IonFastCopy
+                pop bc   
+                pop ix 
+                ld a, c
+                cp b
+                ret z
+                inc b
+
+                ld d, 00h
+                ld e, 10h
+                add ix, de 
+               
+                jr _dapl
+                ret
+;Put large sprite
+;B = height
+;C = width / 8
+; l=yc
+; a=xc
+; ix holds pointer
+
+
+draw_activePayLines:
+;            for(i=1; i<=_lines, i++)
+;                for(j=(1); slot_rules[j+1]!=$FF, j++)                 
+;                   B = drawX[ i[j] ]+4
+;                   C = drawY[ i[j] ]+4
+;                   
+;                   D = drawX[ i[j+1] ]+4
+;                   E = drawY[ i[j+1] ]+4
+;                   bcall(_iline)
+;                   LD B, D
+;                   LD C, E
+
+
+    LD HL, pay_rules
+    LD (data_p+6), HL       ;slot_rules[0]
+
+    ld a, (_lines)
+    ld b, a         ;j
+    ld c, 1         ;start condition
+    push bc
+
+        call _gLX          ;gets X,Y -> B, C
+   
+
+_incj:      push bc
+            LD HL, (data_p+6)   ;j+1
+            inc HL
+            LD (data_p+6), HL
+            call _gLX      
+            ld d, b
+            ld e, c
+            pop bc 
+            call zi_line
+            pop bc
+            inc b
+            ld a, b 
+            cp 06h
+            jr c, _noInci
+            inc c               ;i++
+            ld a, (_lines)
+            cp c 
+            ret nc              ;i >= lines? return
+            ld hl, (data_p+6)
+            inc hl
+            ld (data_p+6), hl
+_noInci:    
+            push bc
+            ld b, d             ;end of this line, is beginning of next line
+            ld c, e             ;__
+            jr _incj
+
+_gLX:
+            LD a, (HL)
+            dec a               ;adj offset.  
+            LD HL, draw_at_X
+            LD (P_), HL
+            call jumpAfromP_
+            ld b, (IX)
+            inc b
+            inc b
+            inc b
+            inc b  
+
+;getY  
+            LD HL, (data_p+6)
+            LD a, (HL)
+            dec A               ;adj offset
+            LD HL, draw_at_Y
+            LD (P_), HL
+            call jumpAfromP_
+            ld c, (IX)
+            inc c
+            inc c
+            inc c
+            inc c
+            push bc
+
+            ;from 4,17h -> 44h, 17h                
+                ld l, b 
+                ld h, 00h
+                ld d, 01h           ;de = 256 = $0100
+                ld e, 00h
+                call mult           ;x * 256
+              
+                pop bc              ;c = y
+                ld a, 64
+                sub c
+                ld c, a
+                ld b,  00h
+                add hl, bc          ;hl = (x*256)+y
+                ;hl is correct
+                ld c, l
+                ld b, h
+                push bc             ;correct coord in bc
+
+            ret
+resetNFTflags:
+               LD a, (nftflags)
+               RES isNFTeligible, a
+               ld (nftflags), a 
+               ld hl, bg_anim_3
+               ld (nft_anim_p), hl
+               ret
+
+qrBonusWin:           
+                bcall(_GrBufClr)
+                call ionFastCopy
+;----------------------------------QR Routines-----------------------------------------------
+printQRCode:   
+               ld a, (nftflags)
+               SET hasWonNFT, a
+               ld (nftflags), a
+
+               call resetNFTflags 
+               ld hl, bg_anim_4
+               ld (nft_anim_p), hl
+               LD HL, qr_data_transID-7
+               ;LD (HL), 'm'
+               ;inc hl
+               ;LD (HL), 'p'
+               ;inc hl
+               ;LD (HL), 'z'
+               call QR_prepareData              
+               call createQR29x29Mask7
+               call rs_encode
+               call qr_formatData
+
+               ld a, 20
+               ld (qr_x), a 
+               ld (qr_y), a 
+               ld ix, qr_copyzone
+               ld h, 2
+               call printQRaw
+               call printQRmask
+               call printQRQuietZones
+               call printBCH
+               call printQRtextDetails
+               call bgsloop
+               bcall(_GrBufClr)
+  
+               call draw_rmenu
+               ld hl, slot_win_states
+                ld (data_p+6), hl
+                call draw_top_layers              
+                call draw_sarr_at_xarr_yarr
+                    call ionFastCopy
+
+bgsloop:
+            ld A, %11111101
+            out (1), A
+            in a, (1)
+            and $20
+            ret z
+            jr bgsloop
+
+;                               ...43210   14...98   ;15 bits
+;qr_v3_BCHfinal:        .db     %01110110, %01101001
+printBCH:
+        ld hl, qr_v3_BCHfinal
+        ld a, 20
+        ld c, a 
+        ld (qr_y), a 
+        add a, 3
+        ld (qr_x), a 
+
+;BCH 0-7 offset = x+28, y+8
+        add a, 28
+        ld b, a 
+        ld a, c  
+        add a, 8+1
+        ld c, a 
+        ld a, LCD_HEIGHT
+        sub c 
+        ld c, a 
+        ld d, $80   ;8; iterations
+        call _drawBCH
+
+;BCH 0-5 offset = x+8, y+0+1  || y+1 *6
+        ld a, (qr_y)
+        ld c, a  
+        ld a, LCD_HEIGHT-1
+        sub c
+        ld c, a 
+        ld a, (qr_x)
+        add a, 8 
+        ld b, a 
+        ld d, $20   ;6 iterations
+        ld a, $0D
+        ld (_bcdir), a 
+        call _drawBCH
+        dec c
+        ;sla e 
+        ;ld d, $40
+        ;call _bchi
+        ld d, 1 
+        bcall(_ipoint)  
+        dec c
+        ld d, 0 
+        bcall(_ipoint)
+        dec b 
+        ld d, 1 
+        bcall(_ipoint)  
+        dec b 
+        dec b 
+        dec b 
+        ld a, $05
+        ld (_bcdir), a 
+        inc hl 
+        ld d, $40   ;6 iterations   
+        ld e, %00000100   
+        call _bchi    
+;BCH 8-14=(0-6) offset = x-8, y-14  || y-1 *7
+
+        ld a, c 
+        sub 14
+        ld c, a 
+        ld a, b 
+        add a, 9
+        ld b, a 
+        ld d, $40   ;7 iterations
+        ld a, $0D
+        ld (_bcdir), a 
+        call _drawBCH   
+        dec b 
+        dec b 
+        ld a, c 
+        add a, 9
+        ld c, a 
+        ld e, 13
+        ld d, 1 
+        call drawDividers
+        inc c
+        inc b
+        inc b
+        ld a, $04
+        ld (_divd), a 
+        call drawDividers
+        ret      
+;13 bits, 1010101....1
+drawDividers:
+        ld e, 13
+        ld d, 1 
+_divi:
+        bcall(_ipoint)
+_divd:  inc c
+        dec e
+        ret z 
+        ld a, d 
+        xor 1
+        ld d, a 
+        jp _divi
+        
+        ret
+
+_drawBCH:
+
+        ld e, %00000001
+    
+_bchi:
+        push de 
+        ld a, (hl)
+        and e 
+        jp z, _bchzb
+        ld d, 1 
+        bcall(_ipoint)
+        jp _bchcont
+_bchzb:
+        ld d, 0
+        bcall(_ipoint)
+_bchcont:
+
+_bcdir: dec b
+        ld a, e 
+        pop de 
+        ld e, a 
+        cp d
+        ret z 
+        sla e
+
+        jp _bchi
+        ret 
+
+;ipoint b=x, c=y, d=f(off,on,xor,test,cpybuff2disp)
+printQRaw:
+;Input:	ix->sprite
+;	a=x
+;	l=y
+;	b=height	(in pixels)
+;	c=width		(in bytes, e.g. 2 would be 16)
+ ;  h=off/on/xor
+  ;   (1=off/2=on/else=xor)
+               ld a, (qr_y)
+               ld l, a 
+               ld a, (qr_x)
+               ld b, 29
+               ld c, 4
+               call put_any_Sprite
+               call ionFastCopy
+               ret 
+
+printQRmask: 
+               ld a, (qr_y)
+               ld l, a 
+               ld a, (qr_x)
+               add a, 3 
+               ld (qr_x), a 
+               ld b, 29
+               ld c, 4
+               ld h, 3
+               ld ix, QR_29x29_mask7
+               call put_any_Sprite
+               call ionFastCopy
+               ret  
+;inputs:
+             
+printQRQuietZones: 
+;l=square dimension   
+;b=x1,c=y1
+;d=x2,e=y2
+;h= 0off/1on/2xor
+
+;outer parimeters
+               ld a, (qr_y)
+               inc a
+               ld (qr_y), a 
+
+               ld a, (qr_x)
+               ld h, a 
+               sub 7
+               ld (qr_x), a 
+               ld b, a 
+               ld a, (qr_y)
+               ld l, a 
+               sub 7 
+               ld (qr_y), a 
+               push hl 
+               ld b, 7
+               ld l, 42
+_outerq:               
+               push bc 
+               push hl 
+               ld H, 00h
+               call drawBox
+               pop hl 
+               dec l
+               dec l 
+               ld a, (qr_x)
+               inc a
+               ld (qr_x), a
+               ld a, (qr_y)
+               inc a 
+               ld (qr_y), a 
+               pop bc 
+               djnz _outerq
+            
+               pop hl           ;refresh original x,y vals
+               ld a, h 
+               ld (qr_x), a 
+               ld a, l 
+               ld (qr_y), a 
+
+;orientor boxes
+               ld a, (qr_y)
+               dec a 
+               ld (qr_y), a 
+               ld l, a 
+               ld a, (qr_x)
+               dec a 
+               ld (qr_x), a 
+               ld h, a
+               push hl 
+               push hl 
+               LD H, 00h                       ;line off
+               ld l, 8 
+               ld b, 3
+               call draw_b_boxes
+               pop hl
+               inc h  
+               inc l  
+               push hl 
+               ld a, l
+               ld (qr_y), a 
+               ld a, h
+               ld (qr_x), a
+               ld b, 4 
+               ld H, 01h
+               ld l, 6
+               call draw_b_boxes
+               pop hl
+               inc h  
+               inc l  
+               push hl 
+               ld a, l
+               ld (qr_y), a 
+               ld a, h
+               ld (qr_x), a
+               ld H, 00h
+               ld l, 4 
+               ld b, 4 
+               call draw_b_boxes       
+               pop hl
+               inc h
+               inc l
+               push hl  
+               ld a, l
+               ld (qr_y), a
+               ld a, h
+               ld (qr_x), a
+               ld H, 01h
+               ld l, 2
+               ld b, 4 
+               call draw_b_boxes
+               pop hl
+               pop hl 
+;ipoint b=x, c=y, d=f(off,on,xor,test,cpybuff2disp)
+               ld a, h 
+               ld (qr_x), a 
+               inc a 
+               ld b, h 
+               inc b 
+               ld a, l              
+               ld (qr_y), a
+               inc a  
+               ld c, a 
+               ld a, LCD_HEIGHT
+               sub c 
+               ld c, a 
+               ld a, 3 
+               add a, b 
+               ld b, a 
+               ld a, c 
+               sub 3 
+               ld c, a 
+               ld d, 1 ;pton
+               bcall(_ipoint)
+               push bc 
+               ld a, b
+               add a, 22
+               ld b, a 
+               bcall(_ipoint)
+               pop bc 
+               ld a, c
+               sub 22
+               ld c, a 
+               bcall(_ipoint)     
+               ret
+;draw's b boxes, of size L 
+draw_B_boxes:           
+
+_dbbi:         
+               push bc
+
+               call drawBox ;upper left
+               pop bc 
+               dec b 
+               ret z 
+               push bc 
+               ld a, (qr_x)
+               add a, 22
+               ld (qr_x), a 
+               call drawBox ;upper right
+               pop bc 
+               dec b 
+               ret z 
+               push bc 
+               ld a, (qr_x)
+               sub 22
+               ld (qr_x), a     
+               ld a, (qr_y)
+               add a, 22
+               ld (qr_y), a              
+
+               call drawBox ;lower left 
+               pop bc 
+               dec b 
+               ret z 
+               push bc 
+               dec l       
+               dec l
+               ld a, (qr_x)
+               add a, 20
+               ld (qr_x), a     
+               ld a, (qr_y)
+               sub 2 
+               ld (qr_y), a 
+               call drawBox ;lower right mini 
+               pop bc 
+               ret
+;l=square dimension   
+;b=x1,c=y1
+;d=x2,e=y2
+;h= 0off/1on/2xor
+drawBox:                                              
+               ld a, (qr_x)
+               ld b, a 
+               add a, l
+               ld d, a 
+               ld a, (qr_y)
+               ld c, a 
+               ld a, LCD_HEIGHT
+               sub c 
+               ld c, a 
+               ld e, a 
+               bcall(_iline)
+               sub l
+               ld e, a 
+               ld d, b 
+               bcall(_iline)
+               ld c, e 
+               ld b, d 
+               ld a, d 
+               add a, l
+               ld d, a 
+               bcall(_iline)
+               ld b, d 
+               ld a, e 
+               add a, l
+               ld e, a 
+               bcall(_iline)  
+               ret 
+          
+QR_prepareData:
+    call getDataSTRLen
+
+    ld a, b 
+    ld (qr_data_len), a 
+    ld (qr_data_len_backup), a 
+;need to shift all data left 4 bits,  until 1st 4 bits of type 
+;type      len      | data(x55)...
+;0100 0000 0001 0100| ---------
+;       A <- B  <- C      
+    xor a 
+    inc b 
+    inc b 
+    inc b 
+    ld hl, qr_data_transID
+_l4shift:
+    rld 
+    dec hl 
+    djnz _l4shift
+;pad out remainder of D-Space
+_pad:
+
+    ld a, (qr_data_len_backup)
+    ld e, a
+    ld a, QR_V3L_DWORDS-1
+    sub e
+
+;add url code logic here(qr_str(len)+qr_urlcodeLen)
+    ld hl, qr_data
+    inc e
+    inc e 
+    ld c, e 
+    ld b, 0  
+    add hl, bc 
+    ld b, a
+    ld a, $EC
+_padlp:
+    ld (hl), a
+    xor $FD
+    inc hl 
+    djnz _padlp
+
+    ld hl, qr_data
+    ld de, qr_DSpace_Message
+    ld bc, QR_V3L_DWORDS
+    ldir
+    ret
+
+;returns the NABK count of the data string in b register
+getDataSTRLen:
+    ld hl, qr_data_string
+    ld b, 0 
+    ld a, 0
+gtstrLP:
+    cp (hl)
+    ret z
+    inc b
+    inc hl
+    jp gtstrLP
+
+
+
+;formats & copies data to copyzone   
+qr_formatData:
+
+;then pad remaining
+    ld hl, qr_copyzone+QR_29X29_BYTES-1
+    ld ix, qr_DSpace_Message
+    ld d, %10000000 ;data bit
+    ld e, %00000001 ;copy-to bit 
+    ld b, QR_ROOF
+    ld a, QR_V3L_DWORDS+QR_V3L_EWORDS
+    ld (qr_wc), a 
+
+_fmtDLPi:
+   
+fmtdsub:
+
+_fmtDLPk:
+     push bc 
+      ld b, 2 
+
+_fmtDLPj:
+      ld a, (hl)
+      and e     ;check copy-to position for barrier
+      jp nz, _Br
+      
+      ld a, (ix)
+      and d 
+      jr z, _fmdz
+      ld a, (hl)
+      or e 
+      ld (hl), a 
+_fmdz:
+      ld a, e
+      srl d 
+      jp nz, _Br
+      ld d, %10000000
+      inc ix 
+      ld a, (qr_wc)
+      dec a 
+      ld (qr_wc), a 
+      jp nz, _Br
+      pop bc 
+      jp _qr_endofdatastring 
+_Br:  ld a, e 
+_flp: xor %11 
+      ld e, a 
+_nrd:
+      djnz _fmtDLPj
+      pop bc 
+      push bc 
+      dec b
+      jp z, _reachedTopOrBottom 
+      
+_ddr: ld bc, 4 
+      and a ;reset carry flag
+_dir: sbc hl, bc        
+     pop bc 
+     djnz _fmtDLPk
+
+_reachedTopOrBottom:
+     sla e 
+     sla e      
+     jr nz, _nre
+
+;end of full 8bit column
+     ld e, %00000001
+     dec hl 
+     ld a, 3 
+     ld (_flp+1), a 
+     jp _ered
+
+_nre:
+     ld a, (_flp+1)
+     sla a 
+     sla a 
+     ld (_flp+1), a 
+
+_ered:     
+     ld a, (_dir+1)
+     xor %1000   ;flipdir adc/sbc
+     ld (_dir+1), a     
+    pop bc  
+    ld b, QR_ROOF
+     jp _fmtDLPk
+
+
+_qr_endofdatastring:
+
+    ld hl, qr_copyzone+36
+    ld d, %10000000
+    ld b, 12 
+_c8i:  
+    ld d, %10000000
+    ld c, (hl)
+    sla c 
+    ld (hl), c 
+    inc hl 
+
+    ld a, (hl)
+    and d 
+    jp z, _z8z8
+    dec hl 
+    ld a, (hl)
+    or %00000001
+    jp _z8e
+_z8z8:
+    dec hl 
+    ld a, (hl)
+    and %11111110
+_z8e:
+    ld (hl), a 
+    inc hl
+    srl d 
+    ld a, (hl)
+    and d 
+    jp z, _z9z9
+    ld a, (hl)
+    or %10000000
+    jp _z9e
+_z9z9:
+    ld a, (hl)
+    and %01111111 
+_z9e:
+    ld (hl), a
+    inc hl
+    inc hl 
+    inc hl
+    djnz _c8i
+
+    ;call qr_produceBCH
+    ;call qr_mask_ED_Space
+    ret
+
+;bits 0-14, edged bits
+;ec level = 01, mask pattern = 111
+;   = 01111    
+;     shift left 10 bits, so we have 15 bits of space
+;   =                (A)   011110000000000
+;Generator polynomial(B):  10100110111  
+;align by significance, then poly divide:
+;                        11110000000000
+;                     p/ 10100110111000   
+;                     ---------------------
+;011110000000000
+; 10100110111000
+;---------------
+;001010110111000
+;  1010011011100
+;---------------
+;      ___________
+;  0000101100100 | <--answer
+;     |__________/    
+
+;    14, 13, 12, 11, 10, 9
+;    1    1   0   1   0  0
+
+;data    01111|0101100100
+;mask    10101|0000010010    
+
+;res     11010|0101110110
+qr_produceBCH:
+    ld hl, qr_v3_BCHmask
+    ld ix, qr_v3_BCHcode
+    ld a, (hl)
+    ld b, (ix)
+    xor b 
+    ld (qr_v3_BCHfinal), a
+    inc hl 
+    inc de
+    ld a, (hl)
+    ld b, (ix)
+    xor b
+    ld (qr_v3_BCHfinal+1), a
+
+    ret 
+qr_mask_ED_Space:
+               ld b, QR_V3L_DWORDS+QR_V3L_EWORDS
+               ld hl, qr_copyzone
+               ld de, QR_29x29_mask7
+               
+_mski:             
+               ld a, (de)
+               xor (hl)
+               ld (hl), a 
+               inc hl 
+               inc de 
+               djnz _mski
+
+;-------------Reed Solomon Error Detect&Correct (EDC)------------
+
+;--Galois Fields
+;256 bit values, adding/subtracting, pos/neg are the same
+
+;inputs: a=x, c=y
+;result: a
+gf_add:
+    xor c 
+    ret 
+;inputs: a=x, c=y
+;result: a
+gf_multiply:
+    ld hl, gf_log_table
+    ld d, a
+    or %0
+    jp z, _ze
+    ld a, c 
+    or %0
+    jp z, _ze
+    ld a, d 
+;load log(x) and log(y)
+    ld b, 0
+    ld d, 0 
+    add hl, bc 
+    ld e, (hl) ;y
+    ld hl, gf_log_table
+    ld c, a
+    add hl, bc 
+    ld a, (hl) ;x
+    ld l, a 
+    ld h, 0 
+    ld d, 0 
+    add hl, de   ;16 bit addition 
+    ld c, l
+    ld b, h 
+    ;load exp(result)
+    ld hl, gf_exp_table 
+    add hl, bc 
+    ld a, (hl)
+    ret
+
+_ze:    
+    xor a
+    ret         ;return 0
+
+;Polynomial multiplication
+;           
+;   inputs: rs_p1*=poly1, (p1len)=len1, rs_p2*=poly2, (p2len)=len2
+;           resultPointer
+;   output: rs_pr*=result poly, (pResLen)=resultLen=(p1Len+p2Len - 1 )
+poly_mult:
+    ;Alloc mem for result (len1 + len2 -1)
+    ld hl, (pMultRes_p)
+    ex de, hl 
+    inc de 
+    ld hl, (pMultRes_p)
+    ;zero out result
+    ld (hl), $00
+    ld a, (p1len) 
+    ld b, a 
+    ld a, (p2len)
+    add a, b
+    dec a 
+    ld (pResLen), a 
+    ld c, a 
+    ld b, 0 
+    ;ld bc, QR_V3L_DWORDS+QR_V3L_EWORDS
+    ldir
+; Input: rdi = pointer to poly1, rsi = len1, rdx = pointer to poly2, rcx = len2
+; Output: rax = pointer to result poly, rbx = result length
+    ld hl, (rs_p1)
+    ld (rs_p1s), hl 
+    ld hl, (rs_p2)
+    ld (rs_p2s), hl 
+    ld hl, (pMultRes_p)
+    ld (rs_pr), hl 
+    ;Perform polynomial multiplication
+    ld bc, 0
+_polyI:     ;i= len of poly1
+    push bc
+     ld hl, (rs_p2s)
+     ld (rs_p2), hl  ; reset L2
+     ld b, 0
+_polyJ:     ;j= len of poly2
+     push bc 
+     ;Load coefficiencts
+      ld hl, (rs_p1)
+      ld a, (hl)
+      ld hl, (rs_p2)
+      ld c, (hl)
+      ;multiply coefficients
+      call gf_multiply
+      ;add to the result
+      ld e, a ;result
+     pop bc 
+     ld a, b  ;a=j
+     ld d, a  ;d=j 
+    pop bc 
+    push bc   ;b=i
+     add a, b ;i+j
+     ld b, 0 
+     ld c, a 
+     ld hl, (rs_pr)
+     add hl, bc 
+    ;ld (rs_pr), hl
+     ld a, (hl)
+     ld c, e   
+     ld b, d   ;push j back onto top of stack
+      push bc    ;.
+      call gf_add 
+      ld (hl), a 
+      ld a, (p2len)
+     pop bc 
+     ld hl, (rs_p2)
+     inc hl
+     ld (rs_p2), hl 
+     inc b  ;d=j=poly2.len
+     cp b 
+     jp nz, _polyJ
+
+     ld hl, (rs_p1)
+     inc hl 
+     ld (rs_p1), hl 
+    pop bc
+    inc b 
+    ld a, (p1len)
+    cp b 
+    jp nz, _polyI 
+
+    ret 
+; def multiply(self, other):
+;    result = [0] * (len(self.coefficients) + len(other.coefficients) - 1)
+;    for i, coef1 in enumerate(self.coefficients):
+;        for j, coef2 in enumerate(other.coefficients):
+;            result[i + j] = self.gf.add(result[i + j], self.gf.multiply(coef1, coef2))
+;    return Polynomial(result, self.gf)
+
+
+
+pdiv:
+;def __mod__(self, other):
+;
+;# Polynomial division (remainder)
+;result = self.coefficients[:]
+;divisor = other.coefficients
+
+;while len(result) >= len(divisor):
+
+     ld a, QR_V3L_DWORDS+QR_V3L_EWORDS-1  ;res=msg
+     ld (rs_msglen), a 
+_pdivI: 
+    
+     ld a, (pdiv_divisorLen)
+     ld b, a
+     ld a, (rs_msglen)
+     cp b
+     jp c, _pdivFIN
+     ld ix, (rs_gen_poly_p)
+     ld (pdiv_divisor_p), ix 
+     ld hl, (msg_p)
+     ld (pdiv_res_p), hl 
+     ;ld (pdiv_divisorLen), a ;len(divisor)
+     ;coeff = result[0]
+     ld a, (hl)
+     ld (pdiv_coeff), a 
+     ld b, 0 
+;    for i in range(len(divisor)):  for 0-(x-1)
+;        result[i] = self.field.add(result[i], self.field.multiply(coeff, divisor[i]))
+;    result.pop(0) ;remove 1st element from list.  [a,b,c].pop(0) = [b,c]
+_pdivJ:
+     push bc 
+      push hl 
+       ld c, (ix)
+       ld a, (pdiv_coeff)
+       call gf_multiply
+       ;result in a
+      pop hl 
+      ld c, (hl) ;result[i]
+      call gf_add 
+      ld (hl), a 
+    pop bc 
+    inc ix 
+    inc hl 
+    ld a, (pdiv_divisorLen)
+    inc b
+    cp b 
+    jp nc, _pdivJ
+    ld a, (rs_msglen)
+    dec a
+    ld (rs_msglen), a 
+    ;pop res[0]
+    inc hl 
+    ld (msg_p), hl 
+    jp _pdivI
+
+_pdivFIN:
+
+;return Polynomial(result, self.field)
+;    result = msg_p*(rs_msglen)
+    ret
+
+
+;reed solomon encode the EDC field
+;inputs: D-Space fields, EDC Count, GS pointer, message(full Dspace)(msg_p)
+;
+
+rs_encode:
+;# Initialize the generator polynomial to [1]
+;    gen = Polynomial([1], gf)
+    ld hl, rs_poly_result
+    ld (pMultRes_p), hl 
+    ld a, 1
+    ld (p1len), a 
+    ld hl, poly_multL1
+    ld (hl), a 
+    ld (rs_p1), hl
+
+    ld b, QR_V3L_EWORDS
+    ld c, 0
+
+;    # Build the generator polynomial by multiplying it with (x + gf.exp_table[i]) for each i
+;    for i in range(nsym):
+;        gen *= Polynomial([1, gf.exp_table[i]], gf)
+_rsI:
+    push bc
+
+    ;ld ix, pResLen
+    ld a, 2
+    ld (p2len), a    ;starting gen p2len = 1st call to poly([1],gf.exp_table[i])
+    ld hl, poly_multL2
+    ld (rs_p2), hl 
+ 
+    ld hl, gf_exp_table
+    ;gen *= Polynomial([1, gf.exp_table[i]], gf)
+    ld b, 0 
+    add hl, bc
+    ld a, (hl)  ;gf.exp_table[i] 
+    ld (poly_multL2+1), a 
+
+    ld hl, poly_multL2
+    ld (rs_p2), hl 
+    call poly_mult   ;result in (pMultRes_p)
+
+    ;copy res to gen
+    ld hl, rs_poly_result
+    ld de, rs_gen
+    ld a, (pResLen)
+    ld c, a
+    ld b, 0  
+    ldir 
+
+    ld a, (p1len)    
+    inc a 
+    ld (p1len), a 
+    ld hl, rs_gen   
+    ld (rs_p1), hl  ;last polymult result = next arg1
+    pop bc
+    inc c
+    djnz _rsI
+
+
+;# Compute the remainder of the message polynomial divided by the generator polynomial
+;remainder = Polynomial(msg.coefficients[:], gf)
+;msg = remainder = padded message
+
+;   copy message over to remainder
+    ld hl, qr_DSpace_Message
+    ld de, rs_msg_remainder
+    ld (rs_remainder_p), de 
+    ld bc, QR_V3L_DWORDS+QR_V3L_EWORDS+1
+    ldir 
+
+    ld b, QR_V3L_DWORDS
+    ld c, 0
+
+
+_rs_remain_i:
+    push bc 
+    ld hl, (rs_remainder_p)
+    ld b, 0
+    add hl, bc 
+    ld a, (hl) 
+    ld (rs_coeff), a 
+    or %0
+    jp z, _riZ
+     ld b, QR_V3L_EWORDS+1  
+     ld c, 0 
+
+_rs_remain_j:     ;j= len of poly2
+     push bc 
+     ;Load coefficiencts
+      ld hl, rs_gen
+      ld b, 0
+      add hl, bc 
+      ld c, (hl)        ;gen[j]
+      ld a, (rs_coeff)  ;coeff
+      call gf_multiply
+      ;add to the result
+      ld e, a ;result
+     pop bc 
+     ld a, c  ;a=j
+     ld d, a  ;d=j 
+    pop hl
+    push hl 
+     push bc  
+      add a, l ;i+j
+      ld b, 0 
+      ld c, a 
+      ld hl, (rs_remainder_p)
+      add hl, bc 
+      ;ld (rs_pr), hl
+      ld a, (hl)
+      ld c, e   
+      call gf_add 
+      ld (hl), a 
+      ld a, (p2len)
+     pop bc 
+     inc c  ;d=j=poly2.len
+     djnz _rs_remain_j    
+
+_riZ:
+    pop bc
+    inc c 
+    djnz _rs_remain_i
+
+    ;copy EDC to end of D_Words
+    ld hl, rs_msg_remainder+QR_V3L_DWORDS
+    ld de, qr_DSpace_Message+QR_V3L_DWORDS
+    ld bc, QR_V3L_EWORDS
+    ldir 
+
+
+    ;qr_Dspace_message now contains full code word
+
+
+    ret 
+
+;remainder = msg % gen  # Calculate the remainder
+     ld ix, (rs_gen_poly_p)
+     ld (pdiv_divisor_p), ix 
+     ld hl, (msg_p)
+     ld (pdiv_res_p), hl 
+
+     call pdiv
+     ld hl, (msg_p)
+     ;remainder
+     ld (pdiv_remainder_p), hl
+
+;    # Append the remainder to the original data to form the encoded message
+;    return data + remainder.coefficients
+     ret 
+
+
+;generateQRCode()
+;   generates a QR code, detailing the unique state of the game/device.  
+;   scanning the code will direct the user to a url, allowing them to connect a wallet & receive payout
+;12px
+;quietzone: (surrounding blank space) = >=4 resolutions;
+;version = 3 (29x29)
+
+;rows 0,3,6...: s0 = %10101010; repeat.
+;   next: cpl(last)   
+;rows (1),2, 4,5...: s1 = %00011100, f0 = %01101101 CY1; push af(CYF); s0xor(f0); pop AF; rr (f0) 
+;         2        : s2 = s1xor(10010010)  
+;
+;clear last 3 bits of each row to 0's at the end. (8x4=32-3=29)
+createQR29x29Mask7:
+    ld hl, QR_29x29_mask7
+    ld a, (r1s0)
+    ld c, a 
+    ld b, 29 
+c297LP:
+    ;r0,3,6
+    call r0_3_6
+    dec b 
+    ret z 
+    ;r1,2 
+    call r1_2
+    dec b
+    ret z
+    call r1_2
+    dec b
+    ret z 
+    ld a, %01101101
+    ld (r1f0), a 
+    ld a, c
+    cpl 
+    ld (r1s0), a 
+    ld c, a 
+    jp c297LP
+    
+    
+;f(move to the next 8 bits along the row)
+;  prep:  
+;     e = r1s0
+;     a = r1f0
+
+;r0s0:                 .db         %10101010
+;r1s0:                 .db         %00011100    
+;r1f0:                 .db         %01101101 ;cy=1
+;r1_4s0_to_r2_5s0:     .db         %10010010 ;cy=0
+;r1_2:   
+r1_2:
+    ld a, (r1f0)        ;works for 1&2 and 4&5
+    ld e, a 
+    ld a, (r1s0)
+    scf 
+    push af 
+     ld (hl), a 
+     inc hl 
+     xor e
+     ld (hl), a
+    pop af
+    ld d, a  
+    ld a, (hl)
+    rr e 
+    xor e 
+    inc hl 
+    ld (hl), a 
+    inc hl 
+    ld (hl), d 
+    inc hl 
+    ld a, (r1_4s0_to_r2_5s0)
+    xor c 
+    ld (r1s0), a 
+    ld a, e 
+    ld (r1f0), a 
+    ret
+
+
+;complete & save entire row.
+;update r0s0 for next mod3 iteration                    
+r0_3_6:   
+    ld a, (r0s0)         
+    ld d, 4
+r0nLP:
+    ld (hl), a 
+    inc hl
+    dec d
+    jp nz, r0nLP
+    cpl
+    ld (r0s0), a 
+
+    RET
+
+printQRtextDetails:
+
+               ld   a, $00
+               ld   l, $00
+               ld   b, 25
+               ld   c, 4
+               ld   h, 3
+               ld  ix, tilogo
+
+               call put_any_Sprite 
+
+
+               ld HL, $0020
+               LD (PenCol), HL
+               LD HL, text_qr_bonus1
+               bcall(_VputS)  
+               ld HL, $0620
+               LD (PenCol), HL
+               LD HL, text_qr_bonus2
+               bcall(_VputS)
+               ld HL, $0C39
+               LD (PenCol), HL
+               LD HL, text_qr_bonus3
+               bcall(_VputS)     
+               ld HL, $1239
+               LD (PenCol), HL
+               LD HL, text_qr_bonus4
+               bcall(_VputS)
+               ld HL, $1B39
+               LD (PenCol), HL
+               LD HL, text_qr_bonus5
+               bcall(_VputS) 
+               ld HL, $2139
+               LD (PenCol), HL
+               LD HL, text_qr_bonusPK
+               bcall(_VputS) 
+               ld HL, $3300
+               LD (PenCol), HL
+               LD HL, text_qr_bonus6
+               bcall(_VputS)  
+               ld HL, $3900
+               LD (PenCol), HL
+               LD HL, text_qr_bonus7
+               bcall(_VputS)          
+
+
+
+               call ionFastCopy
+
+
+    ret
+
+;draws a line through the winning payline, on display
+;sb used between win animations and to indicate to the user active paylines on addition/removal
+;flags
+;   fullScrnDraw, (IY + apiFlg4)  = 1 to use column 95 and row 0 
+;   plotLoc, (IY + plotFlags)     = 1 to draw to the display only 
+;                                 = 0 to draw to display and plotSScreen buffer 
+;   bufferOnly, (IY + plotFlag3)  = 1 to draw to plotSScreen buffer only
+;registers 
+;   BC = 1st point = B=X, C=Y
+;   DE = 2nd point = D=X, E=Y
+;       ex:    LD BC, 25*256+30                ;1st point, X=25, Y=30
+;              LD DE, 62*256+50                ;2nd point, X=62, Y=50
+;   H  = 0/1/2 = off/on/xor
+;registers all preserved
+;(c) Texas Instruments
+zi_line:
+
+                ;SET plotLoc, (IY+plotFlags)     ;display only
+                LD H, 2                         ;signal to turn pixels off
+                bcall(_iline)                   ;draw the line
+                call ionFastCopy
+                ret
+smart_exit:
+               pop hl
+               RES   textWrite, (IY+sgrflags)      ;set flag to write text to grbuffer, not screen.
+               RES   textInverse, (IY+textFlags)   ;invert text                  
+               RET
+;p_exit:
+;                EI
+;                ld SP, (startSP)
+;                halt
+;                ret
+;----------------------------------------------------------------------
+
+aO:             .db      $00      ;$00 = win_Anim, $1A = Cur_reel_state, $34 = Save, $4E = fin
+sX:             .equ     $1A
+sY:             .equ     $34
+
+bt_flags:       .db      %11001001
+isFirstGame:    .EQU     0
+isSpinning:     .EQU     1
+isCounting:     .EQU     2
+isWaiting:      .EQU     3
+isWin:          .EQU     4
+isBonus:        .EQU     5
+is1stBonusRoll: .EQU     6
+clearTop:       .EQU     7
+
+;                         87654321         9
+bonus_enemLocs: .db      %00000000,%00000000, 0
+
+bt_flags2:      .db     %00000000
+isFromBonus:    .EQU    0
+
+_lines          .db      9
+_multiplier     .db      1
+_totalBet       .db      0
+
+bonusCount:     .db      @0
+
+_SHARPMEM_:         .ds                   10        ;allocate 10 contiguous bytes
+startSP             =           _SHARPMEM_+0
+saveGame            =           _SHARPMEM_+2
+
+;isCounted       =          _SHARPMEM_+11
+;isAutoStopping  =          _SHARPMEM_+14
+;isReelSpinAnimCXLEDbySpin =_SHARPMEM_+15 
+    
+spinAnimCount:   .db       $00         ;keeps track of reel spinning animation frame
+spinningReelNo:  .db       $00
+reelTimer:       .db       $00         ;auto stops reels if not manually stopped
+maskXYWH:        .db       $00, $16, $50, $20,0
+
+TOP_ANIM_XY:      .db       $02,$30
+TOP_ANIM_GOAL_XY: .db       $01,$03
+
+;RMENU
+_TEXT_XY_RMENU   .EQU      $1854        ;XY of 1st menu item in rightMenu  
+_TEXT_XY_RMENU2  .EQU      $2054        ;   2nd  
+_TEXT_XY_RMENU3  .EQU      $2754        ;   3rd  
+                           ;y,x
+_NUM_XY_MTP      .EQU      $185A
+_NUM_XY_LNS      .EQU      $235A
+
+
+BON_K: .db  $8F      ;[1]++ = [2] ...
+BON_Y: .db  $2D,$2D,$2D, $22,$22,$22, $17,$17,$17, 0fh
+BON_X: .db  $13,$2E,$49, $13,$2E,$49, $13,$2E,$49, 0fh
+
+enemyTimerMax:    .db     $40,0
+
+                           ; 1,  2,  3,  4,  5
+
+bonusBoard:     .db        $00,$00,$00,$00,$00,$00,$00,$00,$00, $F0
+bonusPeekTimer: .db        $40,$40,$40,$40,$40,$40,$40,$40,$40, $F0
+bonEmyKey:      .db        $00,$00,$00,$00,$00,$00,$00,$00,$00, $F0
+                 ;keys:    1,  2,  3,  4,  5,  6,  7,  8,  9
+kTOsk:          .db        $22,$1A,$12,$23,$1B,$13,$24,$1C,$14, $F0
+bonusFrameMap:  .db        1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1, $F0
+
+heartCount:       .db       03h
+bopCount:         .db       $01
+bonusLvl:         .db       $00
+nxtBonus:         .db       $2A
+
+                            ;Y,X
+_NUM_XY_BO7:      .EQU      $1618
+_NUM_XY_BO8:      .EQU      $1634
+_NUM_XY_BO9:      .EQU      $164F
+_NUM_XY_BO4:      .EQU      $2118
+_NUM_XY_BO5:      .EQU      $2134
+_NUM_XY_BO6:      .EQU      $214F
+_NUM_XY_BO1:      .EQU      $2C18
+_NUM_XY_BO2:      .EQU      $2C34
+_NUM_XY_BO3:      .EQU      $2C4F
+
+_BON_XY_HP1:      .EQU      $1604
+_BON_XY_HP2:      .EQU      $2104
+_BON_XY_HP3:      .EQU      $2D04
+
+_TEXT_XY_TOPBC    .EQU      $0E20        ;YX of lowest title location, on top of disp.
+_TEXT_XY_TOPBL    .EQU      $0E06
+_TEXT_XY_TOPMC    .EQU      $081A
+_TEXT_XY_BONLVL   .EQU      $3941
+
+_TEXT_XY_WINSTR   .EQU      $3825        ;
+_TEXT_XY_CREDIT   .EQU      $3801        ;Denomination symbol location
+_NUM_XY_MONEY     .EQU      $3806        ;User's balance location on disp. 
+_NUM_XY_BOPCNT    .EQU      $3912
+_NUM_XY_BONLVL    .EQU      $394F
+
+_GAMESPEED_       .EQU      $03          ;factor to determine how long animations take($02 is default)
+
+count:          .db       "0",0
+money_string:   .text     "$",0
+blank:          .db       " ",0
+top_win_str1:   .db       "NICE WIN!",0
+top_win_str2:   .text     "YOU DIRTY DOG YOU! ",0
+top_win_str3:   .db       "KEEP IT UP!",0
+top_win_str4:   .db       "MEGA WIN!",0
+
+top_win_BON:    .db       "     BONUS!!!!     ",0
+top_win_BON_0:  .db       "   OUCHHHHHFF#D!!   ",0
+top_win_BON_1:  .db       "     NICE ! ! ! !  ",0
+top_win_BON_2:  .db       "     TOO SLOW!     ",0
+top_win_BON_3:  .db       "    LEVEL UP!!!    ",0
+top_win_BON_WIN: .db      " YOU BEAT THE BONUS!", 0
+
+
+text_top_expl:    .db       "Use keys 1-9 to SMASH EM!",0
+text_bot_expl1:   .db  "           Press ^ to begin...",0
+text_bot_expl2:   .db       "       SMASH him to begin!!",0
+text_bot_expl3:   .db  "           Press ^ to get paid!",0
+text_bot_bon_lvl: .db  "lvl=",0
+
+text_qr_bonus1:   .db  " CONGRATULATIONS!",0
+text_qr_bonus2:   .db  " YOU HAVE FOUND A ",0
+text_qr_bonus3:   .db  "  SECRET    ",0
+text_qr_bonus4:   .db  "  BONUS!!!   ",0
+text_qr_bonus5:   .db  "  PINKEY:   ",0
+text_qr_bonusPK:  .db  "  *******   ",0
+text_qr_bonus6:   .db  "Scan screen with camera.",0
+
+text_qr_bonus7:   .db  "          Press  ^  to return          ",0
+
+
+rm_lines_str:   .db       "ln:",0
+rm_lines_sym_i: .db       "+",0
+rm_lines_sym_d: .db       "-",0
+rm_multi_sym:   .db       "x",0
+
+bot_win_str1:   .db       " x ",0
+bot_win_str2:   .db       "Total Win: $",0
+
+bot_win_BON:    .db       "Press ^ to begin..."
+bot_win_clear:  .db       "                                 ",0
+money:          .db       $88,$13
+new_money:      .db       $88,$13
+cur_win_total:  .db       $00,$00
+                          ;timer
+cflags:         .db       %00000001,0
+
+run_anim_pace:  .db       $02
+run_anim_p:     .db       $00,$00
+nft_anim_p:     .db       $00,$00
+
+nftflags:       .db      %10000000
+isNFTeligible:  .EQU     0
+hasWonNFT:      .EQU     1
+hasBeatBonus:   .EQU     2
+isBB:           .EQU     3
+isCC:           .EQU     4
+isDD:           .EQU     5
+isEE:           .EQU     6
+isFF:           .EQU     7
+
+is_nft_eligible: .db      $00
+                ;         sprite   x        y                 drawArray
+data_p:         .db       $00,$00, $00,$00, $00,$00, $00,$00, $00,$00                ;misc address pointers     
+P_:             .db       $00,$00                                            ;pointer
+p_onscreen:     .db       $00,$00
+activemem:      .db       $A4,$44
+                      
+ratio_table:              ;F   Q    K    A    Che  Coi  Thu  Bon   
+                .db       $28, $5A, $80, $A4, $C3, $DF, $F3, $FF
+
+;symbol
+;       hl*, sprite
+;        16, pay
+;    string, name
+symbols:
+sym_fun:
+            .db     %0000001,0
+            .db     5,0
+            .db     "Fun",0
+sym_queen:  
+            .db     %00000010,0
+            .db     10,0
+            .db     "Queen",0
+sym_king:
+            .db     %00000011,0
+            .db     15,0
+            .db     "King",0  
+sym_ace:
+            .db     %00000100,0
+            .db     20,0
+            .db     "Ace",0
+sym_cherry:
+            .db     %00000101,0
+            .db     25,0
+            .db     "Cherry",0
+sym_coin:
+            .db     %00000111,0
+            .db     30,0
+            .db     "Coin",0
+sym_thunder:
+            .db     %00000111,0
+            .db     40,0
+            .db     "Thunder",0
+sym_hourglass:
+            .db     %00001111,0
+            .db     50,0
+            .db     "Hourglass",0
+sym_bonus:
+            .db     %00011111,0
+            .db     100,0
+            .db     "BONUS",0
+;
+;------SYMBOL ENUMS
+                   ;    Q, K, A, C,Co,Th,Hr,Bo 
+sym_o:      .db     0,0,8,18,27,35,46,55,67,81,0
+
+fun:        .equ    0
+queen:      .equ    8
+king:       .equ    18
+ace:        .equ    27
+cherry:     .equ    35
+coin:       .equ    46
+thunder:    .equ    55
+hourglass:  .equ    64
+bonus:      .equ    78
+
+;-------NAME ENUM.NAME OFFSET
+_name:      .equ    4
+_PAY:       .equ    2
+OFFSET:     .equ    6
+
+rng_seed:       .db     $AA,$AA
+slot_sprites:                         ;19EBC
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00111000
+                .db     %00111000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+
+                .db     %11111111
+                .db     %10000001
+                .db     %10011111
+                .db     %10011111
+                .db     %10000011
+                .db     %10011111
+                .db     %10011111
+                .db     %11111111
+
+                .db     %01111110
+                .db     %11111111
+                .db     %11000011
+                .db     %11000011
+                .db     %11000011
+                .db     %11100011
+                .db     %01111100
+                .db     %00011111
+
+                .db     %11000111
+                .db     %11000110
+                .db     %11001100
+                .db     %11111000
+                .db     %11111000
+                .db     %11001100
+                .db     %11000110
+                .db     %11000111
+
+                .db     %00011000
+                .db     %00111100
+                .db     %01100110
+                .db     %11000011
+                .db     %11111111
+                .db     %11111111
+                .db     %11000011
+                .db     %11000011
+
+                .db     %00010000
+                .db     %00001000
+                .db     %00001000
+                .db     %01110011
+                .db     %11111101
+                .db     %11111101
+                .db     %11111001
+                .db     %01111110
+        
+slot_sprites_coin:
+                .db     %00111100
+                .db     %01011110
+                .db     %10101111
+                .db     %10100111
+                .db     %10100111
+                .db     %10100111
+                .db     %01001110
+                .db     %00111100
+
+                .db     %11100111
+                .db     %00110011
+                .db     %10011001
+                .db     %11001100
+                .db     %01100110
+                .db     %00110011
+                .db     %00011001
+                .db     %11000110 
+
+                .db     %11111111
+                .db     %11111111
+                .db     %01000010
+                .db     %00101100
+                .db     %00110100
+                .db     %01010110
+                .db     %11111111
+                .db     %11111111
+
+bonus_symbol:                               ;16x10
+;                .db     $7F, $FE
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $FF, $FF
+;                .db     $7F, $FE
+                .db     %11111111,%11111111
+                .db     %10010000,%00001001
+                .db     %10010111,%11101001
+                .db     %11100111,%11100111
+                .db     %10000111,%11100001
+                .db     %10000001,%11100001
+                .db     %11100001,%10000111
+                .db     %10010001,%10001001                
+                .db     %10010000,%00001001
+                .db     %11111111,%11111111 
+
+                .db     %11111111
+                .db     %10101001
+                .db     %10010101
+                .db     %10101001
+                .db     %10010101
+                .db     %10101001
+                .db     %10010101
+                .db     %11111111
+
+                .db     %01111100
+                .db     %01111000
+                .db     %01111000
+                .db     %01100000
+                .db     %01110000
+                .db     %11110000
+                .db     %01001000
+                .db     %01000110
+
+                .db     %00111110
+                .db     %11111110
+                .db     %00111110
+                .db     %01111100
+                .db     %11111110
+                .db     %01111100
+                .db     %00111100
+                .db     %00111100
+
+                ;.db     %00000001
+
+CPYRGHT:
+
+                .db     %01111100
+                .db     %00011110
+                .db     %00100000
+                .db     %01010000
+                .db     %01010101
+                .db     %00100110
+                .db     %01011000
+                .db     %11111100
+
+                .db     %11101001
+                .db     %00111001
+                .db     %01001000
+                .db     %11000100
+                .db     %01000100
+                .db     %00101000
+                .db     %00010100
+                .db     %01111110
+
+                .db     %00000000
+                .db     %01110011
+                .db     %10000101
+                .db     %01000101
+                .db     %00100111
+                .db     %00010101
+                .db     %00010101
+                .db     %11100101
+
+_8x8_on:        
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+                .db     %11111111
+_8x8_off:
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+_8x16_on:
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+                .db     %11111111,%11111111
+
+
+_10x16_off:  
+    .db  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+_xxBonusBox:
+
+_8x16_off:        
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+
+
+minimap:        
+                .db     %10000000,%00000000
+                .db     %10000000,%00000000
+                .db     %10000000,%00000000
+                .db     %11111111,%11111111
+                .db     %10000000,%00000000
+                .db     %10000000,%00000000
+                .db     %10000000,%00000000
+                .db     %11111111,%11111111
+                
+                .db     %00000000,%00000000
+                .db     %01111111,%11111111
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %01111111,%11111111
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00100000,%00001000
+                .db     %00000000,%00000000
+                .db     %00001000,%00100000
+                .db     %00000000,%00000000
+                .db     %00000010,%10000000
+                .db     %00000000,%00000000
+
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000010,%10000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00100000,%00001000
+                .db     %00000000,%00000000
+
+                .db     %00000000,%00000001
+                .db     %00000011,%10000000
+                .db     %01011100,%01110111
+                .db     %00000000,%00000000
+                .db     %00000001,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000001,%00000000
+                .db     %01011110,%11110111
+                .db     %00000000,%00000000
+
+ 
+
+                .db     %01011111,%01111100
+                .db     %00000011,%10000000
+                .db     %00010000,%01000100
+                .db     %00000000,%00000000
+                .db     %01111100,%11110111
+                .db     %00000001,%00000000
+                .db     %00000111,%10010000
+                .db     %00000000,%00000000                   
+
+                .db     %00001000,%00100000
+                .db     %00000000,%00000000
+                .db     %00000100,%00010000
+                .db     %00000000,%00000000
+                .db     %00100000,%10000000
+                .db     %00000000,%00000000
+                .db     %01000001,%00000100
+                .db     %00000000,%00000000      
+
+                
+win_box:                ;16x10
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+                .db     $FF, $FF
+
+misc_sprites: 
+misc_sprites_arrow:
+                .db    %00000100
+                .db    %00101000
+                .db    %00110000
+                .db    %00111000
+bonus_enemies:
+bonus_enemy1:
+                .db     %00000000    
+                .db     %00101000
+                .db     %01011010
+                .db     %10100101
+                .db     %10101001
+                .db     %10000001
+                .db     %10010001
+                .db     %10000011
+
+bonus_enemy2:
+                .db     %00010000 
+                .db     %00111000   
+                .db     %01111100
+                .db     %11111110
+                .db     %11101101
+                .db     %11001100 
+                .db     %10111111
+                .db     %10111111
+
+bonus_enemy3:
+                .db     %00110000
+                .db     %01011000
+                .db     %10000111
+                .db     %10001000
+                .db     %10000111
+                .db     %11000000
+                .db     %11111111
+                .db     %11000111
+
+bonus_enemy4:
+                .db     %01100110
+                .db     %01100110
+                .db     %01100110
+                .db     %11100111
+                .db     %11100111
+                .db     %00111100
+                .db     %11111000
+                .db     %11011111
+
+bonus_enemy5:
+                .db     %00111100
+                .db     %00101000
+                .db     %10111101
+                .db     %11101111
+                .db     %11111111
+                .db     %00111100
+                .db     %00111100
+                .db     %00111100
+
+bonus_enemy6:
+                .db     %10000001
+                .db     %11111111
+                .db     %11111111
+                .db     %01110111
+                .db     %00000000
+                .db     %11011101
+                .db     %10101010
+                .db     %00111110    
+
+bonus_enemy_NFT:
+nft_anim_sprite:
+                .db     %01111110
+                .db     %10100101
+                .db     %11011011
+                .db     %11100111
+                .db     %10100101
+                .db     %01011010
+                .db     %00100100
+                .db     %00011000                                
+  
+
+bonus_hammer1:   
+                .db     %01111111,%11111100
+                .db     %01100000,%00010100
+                .db     %01100000,%00010100
+                .db     %01100000,%00010100
+                .db     %01111110,%11111100
+                .db     %00000001,%10000000
+                .db     %00000001,%10000000
+                .db     %00000001,%10000000
+                .db     %00000001,%10000000
+                .db     %00000001,%10000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+bonus_hammer2:   
+                .db     %00000001,%00000000
+                .db     %00000011,%10000000
+                .db     %00000111,%11000000
+                .db     %00001100,%11100000
+                .db     %00011000,%00110000
+                .db     %00001000,%00111000
+                .db     %00001100,%00011100
+                .db     %00001010,%00001110
+                .db     %00010101,%00010111
+                .db     %00101000,%10100110
+                .db     %01100000,%01101100
+                .db     %11000000,%00110000 
+bonus_hammer3:   
+                .db     %00000000,%00000000
+                .db     %00000111,%11111100
+                .db     %00000011,%11111000
+                .db     %00000010,%00001000
+                .db     %11111110,%00001000
+                .db     %11111110,%00001000
+                .db     %00000000,%00001000
+                .db     %00000011,%11111000
+                .db     %00000011,%11111000
+                .db     %00000111,%11111100
+                .db     %0000010,%100000000
+                .db     %0001111,%010011000
+                .db     %01000000,%00100100
+
+bonus_hammer4:
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000111,%11111100
+                .db     %00000011,%11111000
+                .db     %00000010,%00001000
+                .db     %11111110,%00001000
+                .db     %11111110,%00001000
+                .db     %00000000,%00001000
+                .db     %10000011,%11111001
+                .db     %00000011,%11111000
+                .db     %10000111,%11111100
+                .db     %0100010,%111110001
+                .db     %1111111,%011111111
+
+bonus_hammer5:   
+                .db     %00000001,%00000000
+                .db     %00000011,%10000000
+                .db     %00000111,%11000000
+                .db     %00001100,%11100000
+                .db     %00011000,%00110000
+                .db     %00001000,%00111000
+                .db     %00001100,%00011100
+                .db     %00001010,%00001110
+                .db     %00010101,%00010111
+                .db     %00101000,%10100110
+                .db     %01100000,%01101100
+                .db     %11000000,%00110000 
+                .db     %00111111,%11111000
+                .db     %11111111,%11111111
+
+bonus_hammer6:   
+                .db     %0111111,%111111100
+                .db     %01000000,%00011100
+                .db     %01000000,%00011100
+                .db     %01000000,%00011100
+                .db     %0101111,%111111100
+                .db     %01111111,%11111100
+                .db     %00000110,%00000000
+                .db     %00000110,%00000000
+                .db     %00000110,%00000000
+                .db     %00000110,%00000000
+                .db     %00000001,%11110000
+                .db     %00000011,%11111111
+
+bonus_hammer7:
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00111111,%11111110
+                .db     %11111111,%11111110
+bonus_hammer8:
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %00000000,%00000000
+                .db     %11111111,%11111110
+
+bonus_splat1:   
+                .db     %00000000,%00000000
+                .db     %01101101,%01000000
+                .db     %10001010,%10000000
+                .db     %01100001,%10000000
+                .db     %10011110,%10000000
+                .db     %01011110,%01000000
+                .db     %01011101,%10100000
+                .db     %10101011,%10000000
+                .db     %01011110,%01000000
+
+bonus_splat2:   
+                .db     %11000000,%01100000
+                .db     %00000000,%00001000
+                .db     %01100000,%10100000
+                .db     %00000010,%01010000
+                .db     %10001101,%10101000
+                .db     %10011001,%11100000
+                .db     %01001100,%00110000
+                .db     %00000111,%11110000
+                .db     %00001111,%11111000
+
+bonus_heart_on:    
+                .db     %00000000  
+                .db     %01101100
+                .db     %11111010
+                .db     %11111010
+                .db     %11111010
+                .db     %01110100
+                .db     %00111000
+                .db     %00010000
+
+bonus_heart_off:
+                .db     %00000000  
+                .db     %00000000
+                .db     %01101000
+                .db     %01111000
+                .db     %01111000
+                .db     %00110000
+                .db     %00010000
+                .db     %00000000
+              
+
+spin_anim:           
+                .db     %00000000
+                .db     %00000000
+                .db     %01111110
+                .db     %10000001
+                .db     %10000001
+                .db     %01111110
+                .db     %00000000
+                .db     %00000000
+                .db     %00000000
+                .db     %01100110
+                .db     %00000000
+                .db     %01111110
+                .db     %01111110
+                .db     %00100100
+                .db     %00100100
+                .db     %00000000
+
+;(4*8)x25
+tilogo:
+    .db    $00, $FE, $00, $00
+    .db    $00, $FE, $00, $00
+    .db    $00, $FE, $30, $00
+    .db    $00, $FE, $78, $00
+    .db    $00, $FF, $30, $00
+    .db    $00, $FF, $07, $E0
+    .db    $00, $FF, $77, $E0
+    .db    $00, $FF, $77, $E0
+    .db    $00, $F8, $61, $E0
+    .db    $1F, $F8, $E3, $E0
+    .db    $7F, $F8, $E3, $F0
+    .db    $7F, $FE, $EF, $F0
+    .db    $3F, $FE, $CF, $F0
+    .db    $1F, $FD, $DF, $F0
+    .db    $0F, $FD, $DF, $F0
+    .db    $07, $FC, $1F, $F0
+    .db    $07, $9C, $0F, $C0
+    .db    $03, $0E, $0F, $00
+    .db    $00, $0F, $FE, $00
+    .db    $00, $07, $F8, $00
+    .db    $00, $07, $F8, $00
+    .db    $00, $03, $F0, $00
+    .db    $00, $03, $F0, $00
+    .db    $00, $01, $F0, $00
+    .db    $00, $00, $F8, $00
+
+bg_anim_val:    .db     %1111000
+bg_anim_frame:  .db     01
+bg_anim:
+bg_anim_run1:      
+                .db     %00001100 
+                .db     %00011100
+                .db     %00011100
+                .db     %00011100
+                .db     %00001001
+                .db     %00011111
+                .db     %00111100
+                .db     %01110000
+                .db     %00111000
+                .db     %01101000
+                .db     %11001000
+                .db     %11000000        
+bg_anim_run2:      
+                .db     %00000100 
+                .db     %00001100
+                .db     %00011100
+                .db     %00011101
+                .db     %00001001
+                .db     %00011110
+                .db     %00111100
+                .db     %01010000
+                .db     %00101000
+                .db     %01000100
+                .db     %11000010
+                .db     %00000000        
+bg_anim_run3:      
+                .db     %00100000 
+                .db     %01110000
+                .db     %01110010
+                .db     %01100010
+                .db     %00010100
+                .db     %01111000
+                .db     %10110000
+                .db     %00110000
+                .db     %00111100
+                .db     %00100010
+                .db     %01000001
+                .db     %10000001                             
+bg_anim_run4:      
+                .db     %00100000 
+                .db     %00110000
+                .db     %00111000
+                .db     %00111010
+                .db     %00011100
+                .db     %00111000
+                .db     %01111000
+                .db     %10111000
+                .db     %00111000
+                .db     %00100010
+                .db     %00100001
+                .db     %01000001  
+bg_anim_run5:      
+                .db     %00011000 
+                .db     %00011100
+                .db     %00011100
+                .db     %00001100
+                .db     %00001000
+                .db     %00111100
+                .db     %00111100
+                .db     %00111100
+                .db     %00011100
+                .db     %00010100
+                .db     %00110100
+                .db     %00000100 
+bg_anim_run6:      
+
+                .db     %00111000
+                .db     %00011100
+                .db     %00011100
+                .db     %00001100
+                .db     %00011010
+                .db     %00011100
+                .db     %00010100
+                .db     %00111100
+                .db     %00011000
+                .db     %00011000
+                .db     %00001000 
+                .db     %00010000
+
+bg_anim_run7:      
+
+                .db     %00001000
+                .db     %00011000
+                .db     %00111100
+                .db     %00011100
+                .db     %00001000
+                .db     %00011010
+                .db     %00011100
+                .db     %00111000
+                .db     %00011000
+                .db     %00011000
+                .db     %00011100 
+                .db     %00100000
+
+
+bg_anim_1:      
+                .db     %00011000  
+                .db     %00100100
+                .db     %01011010
+                .db     %01011000
+                .db     %00100100
+                .db     %00011010
+                .db     %01011010
+                .db     %00100100
+                .db     %00011000
+
+bg_anim_2: 
+                .db     %11111111  
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %10000001
+                .db     %11111111      
+bg_anim_3: 
+                .db     %00110000 
+                .db     %00110110
+                .db     %10110110
+                .db     %10110110
+                .db     %11111110
+                .db     %11111110
+                .db     %00110000
+                .db     %00110000
+                .db     %00110000
+                .db     %00110000
+bg_anim_4: 
+                .db     %01111111  
+                .db     %10000010
+                .db     %10000010
+                .db     %10000010
+                .db     %10000010
+                .db     %11111110   
+                .db     %00010000                  
+                .db     %00010000    
+                .db     %00010000    
+                .db     %00010000                   
+draw_one_reel:  .db    $08, $05, $05, $07, $08,    $0F
+
+
+
+slot_fin_reel_state:
+slot_chk_win_state:
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02    
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02   
+    .db    $02, $02, $02, $02, $02,    $0F
+;Used to retain board state between poweroffs.
+slot_saved_reel_state:
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02    
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02   
+    .db    $02, $02, $02, $02, $02,    $0F
+slot_cur_reel_state:
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02    
+    .db    $02, $02, $02, $02, $02
+    .db    $02, $02, $02, $02, $02   
+    .db    $02, $02, $02, $02, $02,    $0F
+win_anim_array:
+    .db    $00, $00, $00, $00, $00
+    .db    $00, $00, $00, $00, $00 
+    .db    $00, $00, $00, $00, $00
+    .db    $00, $00, $00, $00, $00   
+    .db    $00, $00, $00, $00, $00,    $0F
+draw_at_X:
+    .db    $04, $04, $04, $04, $04
+    .db    $14, $14, $14, $14, $14
+    .db    $24, $24, $24, $24, $24
+    .db    $34, $34, $34, $34, $34
+    .db    $44, $44, $44, $44, $44,    $0F
+draw_at_Y:
+    .db    $03, $0D, $17, $21, $2B
+    .db    $03, $0D, $17, $21, $2B     
+    .db    $03, $0D, $17, $21, $2B
+    .db    $03, $0D, $17, $21, $2B
+    .db    $03, $0D, $17, $21, $2B,    $0F
+
+
+;Offsets to get to to the parallel positions from CUR_STATE
+                          
+;147AD
+;258BE
+;369CF
+draw_w_h:
+    .db    $08, $01 
+slot_win_states:      
+            ;$[ln#, xInArow, symID, winTot8,16],...
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F
+    .db       $0F, $0F, $0F, $0F, $0F, $0F, 0
+
+;01,06,0B,10,15
+;02,07,0C,11,16
+;--------------
+;03,08,0D,12,17
+;04,09,0E,13,18
+;05,0A,0F,14,19
+
+;147AD
+;258BE
+;369CF
+;pay_rules:
+;    .db    $04, $09, $0E, $13, $18, $FF       ;(16,26 -> 47,26 -> 27,26)
+;    .db    $03, $08, $0D, $12, $17, $FF       ;(16,36 -> 47,36 -> 78,36)
+;
+;    .db    $05, $0A, $0F, $14, $19, $FF       ;(16,16 -> 47,16 -> 78,16)
+;   
+;    .db    $03, $09, $0F, $13, $17, $FF       ;(16,36 -> 47,16 -> 78,36)
+;    .db    $05, $09, $0D, $13, $19, $FF       ;(16,16 -> 47,38 -> 78,16)
+;    
+;    .db    $03, $08, $0E, $12, $17, $FF       ;(16,36 -> 31,36 -> 47,26 -> 62,36 -> 78,36)
+;    .db    $05, $0A, $0E, $14, $19, $FF       ;(16,16 -> 31,16 -> 47,26 -> 62,16 -> 78,16)
+;
+;    .db    $03, $0A, $0D, $14, $17, $FF       ;(16,36 -> 31,16 -> 47,36 -> 62,16 -> 78,36)
+;    .db    $05, $08, $0F, $12, $19, $EE       ;(16,16 -> 31,36 -> 47,16 -> 62,36 -> 78,16)
+                ;payline
+
+pay_rules:
+    .db    $04, $09, $0E, $13, $18, $FF              ;pay line 1
+    .db    $03, $08, $0D, $12, $17, $FF              ;         2-3
+
+    .db    $05, $0A, $0F, $14, $19, $FF 
+   
+    .db    $03, $09, $0F, $13, $17, $FF              ;         3-5
+    .db    $05, $09, $0D, $13, $19, $FF 
+    
+    .db    $03, $08, $0E, $12, $17, $FF              ;         5-7
+    .db    $05, $0A, $0E, $14, $19, $FF 
+
+    .db    $03, $0A, $0D, $14, $17, $FF              ;         8-9
+    .db    $05, $08, $0F, $12, $19, $EE 
+bonus_loc:
+    .db       $FF,$FF,$FF,$FF,$FF
+    .db       $FF,$FF,$FF,$FF,$FF
+    .db       $FF,$FF,$FF,$FF,$FF,  $EE
+
+
+p_callseq:      .db  $00,$00,$00,$00,$00,$00
+rectMaskB1Mask: .db  $00
+;=============================================== 
+;Top-Left reel( 0Ch(+16offset),17h(+10offset) )
+;===============================================    
+
+;---------------------------------DATA------------------------------------------------------
+;--------------------------------GLOBAL-----------------------------------------------------
+LCD_HEIGHT:         .EQU            64
+LCD_WIDTH:          .EQU            96
+
+;-----------------------------QR CODE DATA-------------------------------------------------
+
+
+QR_29x29_mask7:             .fill    29*29, $00
+r0s0:                 .db         %10101010
+r1s0:                 .db         %00011100    
+r1f0:                 .db         %01101101 ;cy=1
+r1_4s0_to_r2_5s0:     .db         %10010010 ;cy=0
+
+QR_29X29_BYTES:       .EQU        29*4
+QR_ROOF:              .EQU          29
+QR_V3L_DWORDS:        .EQU          55
+QR_v3L_EWORDS:        .EQU          15
+
+;msb, right to left, in direction
+qr_data:           
+;Modes: (type, length, value)    
+            ;4bit type selector;  0100 = Byte - Latin-1, 1 char = 8 bits
+qr_data_type:         .db          %00000100
+;           ;length (8bits); count of NABK chars (Num,Alpha,Byte,Kanji) in Data section
+qr_data_len:          .db          %00011100 
+qr_data_string:       .db         "https://minzsoft.xyz/dashboard/ti-bonus/801vV15"
+qr_data_transID:      .db          0
+qr_data_transactionSPC:   .fill     QR_V3L_DWORDS-5, $00
+qr_DSpace_Message:
+;0100      0000                                                                                                                  11padding
+;42,A4,D7,22,E2,05,76,17,47,36,F6,E2,C2,06,36,F6,D6,52,06,86,57,26,52,02,d2,04,92,07,76,16,E7,42,07,46,f2,07,36,56,52,07,96,f7,52,e0,EC,11,EC,11,EC,11,EC,11,EC,11,EC
+    .db     $42,$A4,$D7,$22,$E2,$05,$76,$17,$47,$36,$F6,$E2
+    .db     $C2,$06,$36,$F6,$D6,$52,$06,$86,$57,$26,$52,$02
+    .db     $d2,$04,$92,$07,$76,$16,$E7,$42,$07,$46,$f2,$07
+    .db     $36,$56,$52,$07,$96,$f7,$52,$e0 ;0 = end
+    .db     $EC,$11,$EC,$11,$EC,$11,$EC,$11,$EC,$11,$EC   ;padding 
+post_dfinal_0_padding:  .fill     QR_V3L_EWORDS+1, $00
+
+rs_gen:                 .fill     QR_V3L_EWORDS+1, $00
+rs_msg_remainder:       .fill     QR_V3L_DWORDS+QR_V3L_EWORDS+1, $00
+poly_multL1:            .fill     QR_V3L_DWORDS+QR_V3L_EWORDS, $00
+poly_multL2:            .db       01,00;
+;poly_multL2:            .fill     QR_V3L_DWORDS+QR_V3L_EWORDS, $00
+rs_poly_result:         .fill     QR_V3L_DWORDS+QR_V3L_EWORDS, $00
+
+
+qr_copyzone:
+    .db $FF,$F0,$00,$FF ;0 
+    .db $FF,$F0,$00,$FF ;1
+    .db $FF,$F0,$00,$FF ;2
+    .db $FF,$F0,$00,$FF ;3
+    .db $FF,$F0,$00,$FF ;4
+    .db $FF,$F0,$00,$FF ;5
+    .db $FF,$FF,$FF,$FF ;6
+    .db $FF,$F0,$00,$FF ;7
+    .db $FF,$F0,$00,$FF ;8
+    .db $F0,$00,$00,$00 ;9
+    .db $F0,$00,$00,$00;10    
+    .db $F0,$00,$00,$00;11
+    .db $F0,$00,$00,$00;12
+    .db $F0,$00,$00,$00;13
+    .db $F0,$00,$00,$00;14
+    .db $F0,$00,$00,$00;15
+    .db $F0,$00,$00,$00;16
+    .db $F0,$00,$00,$00;17
+    .db $F0,$00,$00,$00;18
+    .db $F0,$00,$00,$00;19
+    .db $F0,$00,$01,$F0;20 ;may contain 'remainder bits'. zero them out before masking
+    .db $FF,$F0,$01,$F0;21 ;unused format block-(change bit 9 to a 0 before masking)
+    .db $FF,$F0,$01,$F0;22
+    .db $FF,$F0,$01,$F0;23
+    .db $FF,$F0,$01,$F0;24
+    .db $FF,$F0,$00,$00;25
+    .db $FF,$F0,$00,$00;26
+    .db $FF,$F0,$00,$00;27
+    .db $FF,$F0,$00,$00;28
+
+
+
+gf_exp_table:
+    .db    1,2,4,8,16,32,64,128,29,58,116,232,205,135,19,38,76,152
+    .db    45,90,180,117,234,201,143,3,6,12,24,48,96,192,157,39,78,156
+    .db    37,74,148,53,106,212,181,119,238,193,159,35,70,140,5,10,20,40
+    .db    80,160,93,186,105,210,185,111,222,161,95,190,97,194,153,47,94,188
+    .db    101,202,137,15,30,60,120,240,253,231,211,187,107,214,177,127,254,225
+    .db    223,163,91,182,113,226,217,175,67,134,17,34,68,136,13,26,52,104
+    .db    208,189,103,206,129,31,62,124,248,237,199,147,59,118,236,197,151,51
+    .db    102,204,133,23,46,92,184,109,218,169,79,158,33,66,132,21,42,84
+    .db    168,77,154,41,82,164,85,170,73,146,57,114,228,213,183,115,230,209
+    .db    191,99,198,145,63,126,252,229,215,179,123,246,241,255,227,219,171,75
+    .db    150,49,98,196,149,55,110,220,165,87,174,65,130,25,50,100,200,141
+    .db    7,14,28,56,112,224,221,167,83,166,81,162,89,178,121,242,249,239
+    .db    195,155,43,86,172,69,138,9,18,36,72,144,61,122,244,245,247,243
+    .db    251,235,203,139,11,22,44,88,176,125,250,233,207,131,27,54,108,216
+    .db    173,71,142,1,2,4,8,16,32,64,128,29,58,116,232,205,135,19
+    .db    38,76,152,45,90,180,117,234,201,143,3,6,12,24,48,96,192,157
+    .db    39,78,156,37,74,148,53,106,212,181,119,238,193,159,35,70,140,5
+    .db    10,20,40,80,160,93,186,105,210,185,111,222,161,95,190,97,194,153
+    .db    47,94,188,101,202,137,15,30,60,120,240,253,231,211,187,107,214,177
+    .db    127,254,225,223,163,91,182,113,226,217,175,67,134,17,34,68,136,13
+    .db    26,52,104,208,189,103,206,129,31,62,124,248,237,199,147,59,118,236
+    .db    197,151,51,102,204,133,23,46,92,184,109,218,169,79,158,33,66,132
+    .db    21,42,84,168,77,154,41,82,164,85,170,73,146,57,114,228,213,183
+    .db    115,230,209,191,99,198,145,63,126,252,229,215,179,123,246,241,255,227
+    .db    219,171,75,150,49,98,196,149,55,110,220,165,87,174,65,130,25,50
+    .db    100,200,141,7,14,28,56,112,224,221,167,83,166,81,162,89,178,121
+    .db    242,249,239,195,155,43,86,172,69,138,9,18,36,72,144,61,122,244
+    .db    245,247,243,251,235,203,139,11,22,44,88,176,125,250,233,207,131,27
+    .db    54,108,216,173,71,142
+
+gf_log_table:
+    .db    0,0,1,25,2,50,26,198,3,223,51,238,27,104,199,75
+    .db    4,100,224,14,52,141,239,129,28,193,105,248,200,8,76
+    .db    113,5,138,101,47,225,36,15,33,53,147,142,218,240,18
+    .db    130,69,29,181,194,125,106,39,249,185,201,154,9,120,77
+    .db    228,114,166,6,191,139,98,102,221,48,253,226,152,37,179
+    .db    16,145,34,136,54,208,148,206,143,150,219,189,241,210,19
+    .db    92,131,56,70,64,30,66,182,163,195,72,126,110,107,58
+    .db    40,84,250,133,186,61,202,94,155,159,10,21,121,43,78
+    .db    212,229,172,115,243,167,87,7,112,192,247,140,128,99,13
+    .db    103,74,222,237,49,197,254,24,227,165,153,119,38,184,180
+    .db    124,17,68,146,217,35,32,137,46,55,63,209,91,149,188
+    .db    207,205,144,135,151,178,220,252,190,97,242,86,211,171,20
+    .db    42,93,158,132,60,57,83,71,109,65,162,31,45,67,216
+    .db    183,123,164,118,196,23,73,236,127,12,111,246,108,161,59
+    .db    82,41,157,85,170,251,96,134,177,187,204,62,90,203,89
+    .db    95,176,156,169,160,81,11,245,22,235,122,117,44,215,79
+    .db    174,213,233,230,231,173,232,116,214,244,234,168,80,88,175   
+
+rs_p1:       .db         $00,$00
+rs_p2:       .db         $00,$00   ;enc pointers
+rs_p1s:      .db         $00,$00
+rs_p2s:      .db         $00,$00
+rs_pr:       .db         $00,$00
+p1len:       .db         $00
+p2len:       .db         $00
+pResLen:     .db         $00
+pMultRes_p:  .db         $00,00
+rs_gen_poly_p:  .db        $00,$00
+msg_p:           .db        $00,$00
+pdiv_res_p:         .db         $00,$00
+pdiv_divisor_p:     .db         $00,$00
+rs_msglen:              .db     $00
+pdiv_remainder_p:   .db         $00,$00
+pdiv_coeff:         .db         $00,$00
+pdiv_divisorLen:    .db         $00,$00
+rs_remainder_p:     .db         $00,$00
+rs_coeff:           .db         %00
+qr_data_len_backup  .db         $00
+qr_wc:              .db         $00
+generator_polynomial:  .db     %10100110, %11100000
+qr_v3_BCHmask:         .db     %00010010, %10101000
+qr_v3_BCHcode:         .db     %01100100, %10111100 ;bit0 = lsb
+qr_v3format_string:    .db     %01111000, %00000000 ;EDClvl + maskb + 10 0's
+;                               ...43210   14...98   ;15 bits
+qr_v3_BCHfinal:        .db     %01110110, %01101001
+qr_x:               .db     $00
+qr_y:               .db     $00
+
+
+
+.end
+END

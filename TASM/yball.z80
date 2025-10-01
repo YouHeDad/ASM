@@ -1,0 +1,246 @@
+;-------------------------------------------------------------------------
+;The Ball by Emir Sakic
+;saka@hotmail.com
+;Examples on sprites and self modifying code
+;(c) 2001.
+;-------------------------------------------------------------------------
+
+        .nolist
+	#include "ti83plus.inc"
+        #include "ion8x.inc"
+	#define    progstart    $9D95
+        .list
+
+#ifdef TI83P
+COORD   .equ    8A3Ah
+        .org    progstart-2
+        .db     $BB,$6D
+#else
+COORD   =       STATVARS
+        .org    progstart
+#endif
+        ret
+        jr      nc,START 			;jumps to the label START
+        .db     "spritez by jrude",0		;The title displayed by ION
+
+START:         
+
+        b_call(_RunIndicOff)
+        b_call(_GrBufClr)
+
+Show:
+        CALL    PutSpr
+        b_call(_GrBufCpy)
+
+KeyLoop:
+        b_call(_GetKey)
+        CP      kClear
+        RET     Z
+
+        CP      kUp
+        JR      Z, MoveUp
+        CP      kDown
+        JR      Z, MoveDown
+        CP      kLeft
+        JR      Z, MoveLeft
+        CP      kRight
+        JR      NZ, KeyLoop
+
+; Move sprite right
+        CALL    PutSpr          ; Erase sprite
+        LD      HL, xpos
+        INC     (HL)
+        JR      Show            ; Draw sprite at new location
+
+MoveLeft:
+; Move sprite left
+        CALL    PutSpr
+        LD      HL, xpos
+        DEC     (HL)
+        JR      Show
+
+MoveUp:
+; Move sprite up
+        CALL    PutSpr
+        LD      HL, ypos
+        DEC     (HL)
+        JR      Show
+
+MoveDown:
+        CALL    PutSpr
+        LD      HL, ypos
+        INC     (HL)
+        JR      Show
+
+ypos:   .DB     0
+xpos:   .DB     0
+
+sprite:
+        .DB     %10000001
+        .DB     %11000011
+        .DB     %01100110
+        .DB     %00111100
+        .DB     %00111100
+        .DB     %01100110
+        .DB     %11000011
+        .DB     %10000001
+
+PutSpr:
+        LD      DE, (ypos)
+        LD      IX, sprite
+        LD      B, 8
+
+ClipSprXOR:
+; D = xpos
+; E = ypos
+; B = height
+; IX = image address
+; Start by doing vertical clipping
+    LD     A, %11111111         ; Reset clipping mask
+    LD     (clip_mask), A
+    LD     A, E                 ; If ypos is negative
+    OR     A                    ; try clipping the top
+    JP     M, ClipTop           ;
+ 
+    SUB    64                   ; If ypos is >= 64
+    RET    NC                   ; sprite is off-screen
+
+    NEG                         ; If (64 - ypos) > height
+    CP     B                    ; don't need to clip
+    JR     NC, VertClipDone     ; 
+
+    LD     B, A                 ; Do bottom clipping by
+    JR     VertClipDone         ; setting height to (64 - ypos)
+
+ClipTop:
+    LD     A, B                 ; If ypos <= -height
+    NEG                         ; sprite is off-screen
+    SUB    E                    ;
+    RET    NC                   ;
+
+    PUSH   AF
+    ADD    A, B                 ; Get the number of clipped rows
+    LD     E, 0                 ; Set ypos to 0 (top of screen)
+    LD     B, E                 ; Advance image data pointer
+    LD     C, A                 ;
+    ADD    IX, BC               ;
+    POP    AF
+    NEG                         ; Get the number of visible rows
+    LD     B, A                 ; and set as height
+
+VertClipDone:
+; Now we're doing horizontal clipping
+    LD     C, 0                 ; Reset correction factor
+    LD     A, D
+
+    CP     -7                   ; If 0 > xpos >= -7
+    JR     NC, ClipLeft         ; clip the left side
+
+    CP     96                   ; If xpos >= 96
+    RET    NC                   ; sprite is off-screen
+
+    CP     89                   ; If 0 <= xpos < 89
+    JR     C, HorizClipDone     ; don't need to clip
+
+ClipRight:
+    AND    7                    ; Determine the clipping mask
+    LD     C, A
+    LD     A, %11111111
+FindRightMask:
+    ADD    A, A
+    DEC    C
+    JR     NZ, FindRightMask
+    LD     (clip_mask), A
+    LD     A, D
+    JR     HorizClipDone
+
+ClipLeft:
+    AND    7                    ; Determine the clipping mask
+    LD     C, A
+    LD     A, %11111111
+FindLeftMask:
+    ADD    A, A
+    DEC    C
+    JR     NZ, FindLeftMask
+    CPL
+    LD     (clip_mask), A
+    LD     A, D
+    ADD    A, 96                ; Set xpos so sprite will "spill over"
+    LD     C, 12                ; Set correction
+
+HorizClipDone:
+; A = xpos
+; E = ypos
+; B = height
+; IX = image address
+
+; Now we can finally display the sprite.
+    LD     H, 0
+    LD     D, H
+    LD     L, E
+    ADD    HL, HL
+    ADD    HL, DE
+    ADD    HL, HL
+    ADD    HL, HL
+
+    LD     E, A
+    SRL    E
+    SRL    E
+    SRL    E
+    ADD    HL, DE
+
+    LD     DE, PlotSScreen
+    ADD    HL, DE
+
+    LD     D, 0                 ; Correct graph buffer address
+    LD     E, C                 ; if clipping the left side
+    SBC    HL, DE               ;
+
+    AND    7
+    JR     Z, _Aligned
+
+    LD     C, A
+    LD     DE, 11
+
+_RowLoop:
+    PUSH   BC
+    LD     B, C
+    LD     A, (clip_mask)       ; Mask out the part of the sprite
+    AND    (IX)                 ; to be horizontally clipped
+    LD     C, 0
+
+_ShiftLoop:
+    SRL    A
+    RR     C
+    DJNZ   _ShiftLoop
+
+    XOR    (HL)
+    LD     (HL), A
+
+    INC    HL
+    LD     A, C
+    XOR    (HL)
+    LD     (HL), A
+
+    ADD    HL, DE
+    INC    IX
+    POP    BC
+    DJNZ   _RowLoop
+    RET
+
+_Aligned:
+    LD     DE, 12
+
+_PutLoop:
+    LD     A, (IX)
+    XOR    (HL)
+    LD     (HL), A
+    INC    IX
+    ADD    HL, DE
+    DJNZ   _PutLoop
+    RET
+
+clip_mask:      .DB     0
+
+.end
+END
